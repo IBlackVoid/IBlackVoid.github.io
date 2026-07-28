@@ -1,0 +1,1064 @@
+
+/* void.js — the terminal.
+ *
+ * The whole page is one display. A voxel world is raymarched into an offscreen
+ * buffer sized to the character grid, then a second pass reads exactly one
+ * texel per cell and stamps a glyph on it. That split is the entire trick: the
+ * expensive pass (a real 3D march) runs at ~480x270, and the only thing that
+ * ever touches full resolution is a handful of texture reads. It is also how a
+ * terminal actually works, which is the point.
+ *
+ * No libraries. No build. WebGL1 so it runs on anything.
+ */
+(() => {
+"use strict";
+
+/* ---------------------------------------------------------------- config -- */
+
+const STATIONS = 6;          // must match the number of <section class=station>
+const CELL_CSS = 9;          // glyph cell, in CSS pixels
+const DPR_CAP  = 2;
+const MAX_CANVAS_PIXELS = 3000000;
+const MAX_STEPS = 112;
+
+// Cell coordinates are world units, so bounds are read directly by the marcher.
+// Tight bounds are the main perf lever: a ray that misses the box never steps.
+const BAND     = 0.17;       // half-width of a station transition, in stations
+
+const WORLDS = [
+  { min: [-48, 0, -48], max: [ 48, 24,  48] },  // 0 relief
+  { min: [-48, 0,   2], max: [ 48, 14,  30] },  // 1 histogram
+  { min: [-48, 0, -30], max: [ 48, 14,  30] },  // 2 split
+  { min: [-52, 0, -18], max: [ 52, 32,  18] },  // 3 commit topology
+  { min: [-46, 0, -14], max: [ 46, 28,  14] },  // 4 project machines
+  { min: [-64, 0,   0], max: [ 64, 38,  10] },  // 5 mark
+];
+
+/* ---------------------------------------------------------------- shaders -- */
+
+const VERT = `
+attribute vec2 aPos;
+void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }`;
+
+/* Pass 1 — the world. Amanatides & Woo grid traversal: exact, branch-free per
+ * step, and it hands back the face normal for free. Sphere tracing would blur
+ * the silhouettes we specifically want hard.
+ *
+ * There is one world, not six. Every station stands on the same ruled ground
+ * plane at y=0, and a station boundary is a front sweeping across that ground
+ * rewriting what is on it — the old station ahead of the front, the new one
+ * behind. Nothing ever cuts, and nothing ever fades to an empty screen.
+ */
+const SCENE = `
+precision highp float;
+
+uniform vec2      uRes, uShift;
+uniform vec3      uCamPos, uCamTgt, uUMin, uUMax;
+uniform float     uTime, uWorldA, uWorldB, uMorph, uPhase, uCut, uFocus,
+                  uInflate, uSplit, uZoom;
+uniform sampler2D uRelief, uMark;
+
+const vec3 VOIDC = vec3(0.047, 0.047, 0.047);
+const vec3 CYAN  = vec3(0.251, 0.627, 0.659);
+const vec3 AMBER = vec3(0.816, 0.408, 0.125);
+const vec3 SHINE = vec3(0.973, 0.925, 0.847);
+const vec3 GREEN = vec3(0.314, 0.784, 0.439);
+const vec3 STEEL = vec3(0.470, 0.600, 0.640);
+
+float h11(float p){ return fract(sin(p * 127.1) * 43758.5453123); }
+float h21(vec2  p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
+float h31(vec3  p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453123); }
+
+float lumOf(vec3 c){ return dot(c, vec3(0.299, 0.587, 0.114)); }
+
+/* Each station's footprint. Kept in the shader rather than passed in because
+ * during a transition two of them are live at once and the marcher only gets
+ * their union. Mirrored by WORLDS in the script above. */
+void wbounds(float w, out vec3 lo, out vec3 hi){
+  if      (w < 0.5){ lo = vec3(-48.0, 0.0,-48.0); hi = vec3( 48.0, 24.0, 48.0); }
+  else if (w < 1.5){ lo = vec3(-48.0, 0.0,  2.0); hi = vec3( 48.0, 14.0, 30.0); }
+  else if (w < 2.5){ lo = vec3(-48.0, 0.0,-30.0); hi = vec3( 48.0, 14.0, 30.0); }
+  else if (w < 3.5){ lo = vec3(-52.0, 0.0,-18.0); hi = vec3( 52.0, 32.0, 18.0); }
+  else if (w < 4.5){ lo = vec3(-46.0, 0.0,-14.0); hi = vec3( 46.0, 28.0, 14.0); }
+  else             { lo = vec3(-64.0, 0.0,  0.0); hi = vec3( 64.0, 38.0, 10.0); }
+}
+
+/* Exact inverse CDF for the six measured self-compile buckets:
+ * 78,438 / 15,948 / 8,333 / 9,259 / 1,881 / 1,603 requests.
+ * Rows are a deterministic reconstruction at those observed proportions. */
+float reqLen(float u){
+  if (u < 0.67934039) return   2.0 + floor(u / 0.67934039 * 30.0);
+  if (u < 0.81746375) return  33.0 + floor((u - 0.67934039) / 0.13812336 * 15.0);
+  if (u < 0.88963469) return  49.0 + floor((u - 0.81746375) / 0.07217094 * 15.0);
+  if (u < 0.96982557) return  65.0 + floor((u - 0.88963469) / 0.08019088 * 63.0);
+  if (u < 0.98611664) return 129.0 + floor((u - 0.96982557) / 0.01629107 * 127.0);
+  return                         257.0 + floor((u - 0.98611664) / 0.01388336 * 127.0);
+}
+
+/* 462 of 463 measured stack-eligible string-to-rune conversions stayed at or
+ * below 32 elements. This lane is in rune elements, not bytes. */
+float runeLen(float u){
+  if (u < 0.99784017) return 1.0 + floor(u / 0.99784017 * 31.0);
+  return 65.0 + floor((u - 0.99784017) / 0.00215983 * 63.0);
+}
+
+/* The ground. Ruled every eight cells, shared by every station, and the reason
+ * the page reads as one place: the floor never changes, only what stands on it. */
+float ground(vec3 c){
+  if (c.x < -84.0 || c.x > 114.0 || c.z < -64.0 || c.z > 64.0) return 0.0;
+  if (mod(c.x, 8.0) < 1.0 || mod(c.z, 8.0) < 1.0) return 13.0;
+  return 0.0;
+}
+
+/* Material id for one cell of one station. 0 is empty. Returning an id rather
+ * than a colour keeps the inner loop to a single texture read. */
+float worldAt(float w, vec3 c){
+  vec3 lo, hi;
+  wbounds(w, lo, hi);
+  if (any(lessThan(c, lo)) || any(greaterThan(c, hi))) return 0.0;
+  if (c.y < 1.0) return ground(c);
+
+  float m = 0.0;
+
+  if (w < 0.5){
+    // 00 — the relief. His own Pixel-Ripper frame laid on the ground as
+    // terrain, luminance as height, so the render stops being a picture and
+    // becomes a landscape the camera descends over.
+    vec2 uv = vec2((c.x - lo.x) / (hi.x - lo.x), (c.z - lo.z) / (hi.z - lo.z));
+    float l = lumOf(texture2D(uRelief, uv).rgb);
+    float h = 1.0 + floor((0.03 + 0.97 * pow(l, 1.12)) * (hi.y - 2.0) * uInflate);
+    if (c.y <= h) m = 1.0;
+
+  } else if (w < 1.5){
+    // 01 — a deterministic reconstruction sampled from the six observed
+    // bucket counts. The bright wall is the old 32-byte constant; every
+    // oxide cell past it represents the measured spill distribution.
+    float row = c.z + floor(uPhase);
+    float b   = c.x - lo.x;                       // byte index along the row
+    if (abs(b - 32.0) < 0.5 && c.y < 9.0) return 4.0;
+    // Every other row left empty. Packed solid the field reads as one sheet
+    // instead of a stack of separate measurements.
+    if (mod(row, 2.0) >= 1.0) return 0.0;
+    float L   = reqLen(h11(row * 1.37 + 3.1));
+    float top = 2.0 + ((b < 32.0) ? 0.0 : floor((b - 31.0) * 0.42));
+    if (b < L && c.y < top) m = b < 32.0 ? 2.0 : 3.0;
+
+  } else if (w < 2.5){
+    // The upper lane keeps byte units. The lower lane keeps rune-element units:
+    // its wall at 32 therefore means 32 runes, or 128 bytes of stack.
+    float wall = mix(32.0, 64.0, uSplit);
+    float row  = c.z + floor(uPhase);
+    float b    = c.x - lo.x;
+    if (c.z > 1.0){
+      if (abs(b - wall) < 0.5 && c.y < 2.0 + 7.0 * max(0.05, uSplit)) return 4.0;
+      if (mod(row, 2.0) >= 1.0) return 0.0;
+      float L   = reqLen(h11(row * 1.37 + 3.1));
+      float top = 2.0 + ((b < wall) ? 0.0 : floor((b - wall + 1.0) * 0.42));
+      if (b < L && c.y < top) m = b < wall ? 2.0 : 3.0;
+    } else if (c.z < -1.0 && h11(row * 1.19 + 7.0) < uSplit){
+      if (abs(b - 32.0) < 0.5 && c.y < 2.0 + 7.0 * uSplit) return 4.0;
+      if (mod(row, 2.0) >= 1.0) return 0.0;
+      float L = runeLen(h11(row * 2.11 + 9.7));
+      if (b < L && c.y < 1.0 + 2.0 * uSplit) m = 5.0;
+    }
+
+  } else if (w < 3.5){
+    // A steel trunk carries the merged Go commit. Three review branches leave
+    // it without closing: they remain shells until they land.
+    if (abs(c.z) < 1.2 && c.x > -48.0 && c.x < 48.0 &&
+        c.y >= 2.0 && c.y < 4.0) m = 14.0;
+
+    if (abs(c.x + 36.0) < 5.0 && abs(c.z) < 5.0 && c.y < 28.0){
+      m = 6.0;
+    } else {
+      float i = floor((c.x + 22.0) / 24.0);
+      float cx = -10.0 + i * 24.0;
+      if (i >= 0.0 && i < 3.0){
+        float branchY = 4.0 + c.z * 0.66;
+        if (abs(c.x - cx) < 1.0 && c.z > 0.0 && c.z < 11.0 &&
+            abs(c.y - branchY) < 1.0) m = 7.0;
+        vec3 q = c - vec3(cx, 13.0 + i * 2.0, 12.0);
+        vec3 aq = abs(q);
+        bool inside = max(aq.x, max(aq.y, aq.z)) < 5.0;
+        bool shell = max(aq.x, max(aq.y, aq.z)) > 3.7;
+        if (inside && shell) m = 7.0;
+      }
+    }
+
+  } else if (w < 4.5){
+    float i = floor((c.x + 46.0) / 23.0);
+    vec3 q = c - vec3(-34.5 + i * 23.0, 14.0, 0.0);
+
+    if (i < 0.5){
+      // VoiDex: an audio waveform rises into timed subtitle layers.
+      float wave = sin((q.x + uTime * 4.0) * 0.72) * 2.6;
+      if (abs(q.y + 8.0) < 1.0 && abs(q.z - wave) < 1.0 && abs(q.x) < 10.0) m = 9.0;
+      if (q.y > -3.0 && q.y < 9.0 && mod(q.y + 3.0, 4.0) < 1.0 &&
+          abs(q.x) < 8.5 && abs(q.z) < 6.0) m = 9.0;
+
+    } else if (i < 1.5){
+      // Pixel-Ripper: source luminance becomes a field of glyph-bearing cells.
+      vec2 uv = vec2(q.x / 18.0 + 0.5, q.y / 20.0 + 0.5);
+      float l = lumOf(texture2D(uRelief, uv).rgb);
+      if (abs(q.z) < 1.0 && abs(q.x) < 9.0 && abs(q.y) < 10.0 &&
+          h21(floor(q.xy) + 4.0) < l * 1.18) m = 10.0;
+      float sweep = mod(uTime * 4.0, 22.0) - 11.0;
+      if (abs(q.x - sweep) < 0.8 && abs(q.y) < 10.0 && abs(q.z) < 2.0) m = 4.0;
+
+    } else if (i < 2.5){
+      // Aethelred: three rectangular namespace boundaries, nested and explicit.
+      vec3 aq = abs(q);
+      float d0 = max(aq.x / 10.0, max(aq.y / 10.0, aq.z / 10.0));
+      float d1 = max(aq.x /  7.0, max(aq.y /  7.0, aq.z /  7.0));
+      float d2 = max(aq.x /  4.0, max(aq.y /  4.0, aq.z /  4.0));
+      if (abs(d0 - 1.0) < 0.10 || abs(d1 - 1.0) < 0.14 || abs(d2 - 1.0) < 0.24) m = 11.0;
+
+    } else {
+      // Helios: replicas around a primary, with a write pulse in flight.
+      float a  = atan(q.z, q.x);
+      float nd = floor((a + 3.14159) / 0.7854);
+      float na = -3.14159 + nd * 0.7854 + 0.3927;
+      vec3 node = vec3(cos(na) * 8.0, 0.0, sin(na) * 8.0);
+      if (length(q - node) < 2.6) m = 12.0;
+      float ta = uTime * 1.1;
+      if (length(q - vec3(cos(ta) * 8.0, 0.0, sin(ta) * 8.0)) < 1.8) m = 4.0;
+      if (abs(q.x) < 1.0 && abs(q.z) < 1.0 && abs(q.y) < 7.0) m = 12.0;
+    }
+
+  } else {
+    // 05 — the mark, standing on the same ground and coming apart.
+    vec2 uv = vec2((c.x - lo.x) / (hi.x - lo.x), 1.0 - (c.y - 2.0) / 34.0);
+    if (uv.y > 0.0 && uv.y < 1.0 && texture2D(uMark, uv).r > 0.5 && c.z < 8.0) m = 8.0;
+  }
+
+  return m;
+}
+
+/* Where the sweep front is for a given cell. Negative is still the old
+ * station, positive has been rewritten. The per-cell jitter makes the edge
+ * ragged at character scale instead of a ruler-straight wipe. */
+float front(vec3 c){
+  float u = (c.x - uUMin.x) / max(1.0, uUMax.x - uUMin.x);
+  return (uMorph * 1.36 - 0.18) - u + (h31(c * 0.83) - 0.5) * 0.20;
+}
+
+float solid(vec3 c){
+  float w = uWorldA;
+  if (abs(uWorldA - uWorldB) > 0.1) w = (front(c) > 0.0) ? uWorldB : uWorldA;
+  float m = worldAt(w, c);
+  if (m > 0.0 && uCut > 0.0 && h31(c * 0.37 + 11.0) < uCut) return 0.0;
+  return m;
+}
+
+/* Glyph ink covers maybe a tenth of a cell, so a value that looks correct here
+ * arrives on screen an order of magnitude darker. Everything below is graded
+ * for what survives the character pass, not for what looks right in the buffer. */
+vec3 matColor(float m, vec3 c){
+  if (m < 1.5){
+    vec3 lo, hi; wbounds(0.0, lo, hi);
+    vec2 uv = vec2((c.x - lo.x) / (hi.x - lo.x), (c.z - lo.z) / (hi.z - lo.z));
+    vec3 t = texture2D(uRelief, uv).rgb;
+    float sourceLuma = lumOf(t);
+    vec3 sourceColour = vec3(sourceLuma) + (t - vec3(sourceLuma)) * 1.82;
+    float lift = pow(sourceLuma, 0.78);
+    return clamp(sourceColour, 0.0, 1.35) * (1.42 + 0.86 * lift)
+         + SHINE * 0.025;
+  }
+  if (m < 2.5)  return CYAN  * (1.05 + 0.45 * h31(c * 0.7));
+  if (m < 3.5)  return AMBER * (1.16 + 0.55 * h31(c * 0.7));
+  if (m < 4.5)  return SHINE * 1.45;
+  if (m < 5.5)  return STEEL * (1.00 + 0.38 * h31(c * 0.7));
+  if (m < 6.5)  return GREEN * (1.28 + 0.28 * h31(c * 0.5));
+  if (m < 7.5)  return AMBER * 1.08;
+  if (m < 8.5)  return SHINE * (1.20 + 0.32 * h31(c * 0.4));
+  if (m < 9.5)  return CYAN * ((abs(uFocus) < 0.5) ? 2.10 : 1.04);
+  if (m < 10.5) return vec3(0.95, 0.64, 0.36) * ((abs(uFocus - 1.0) < 0.5) ? 2.10 : 1.02);
+  if (m < 11.5) return STEEL * ((abs(uFocus - 2.0) < 0.5) ? 2.20 : 1.12);
+  if (m < 12.5) return vec3(0.68, 0.56, 0.86) * ((abs(uFocus - 3.0) < 0.5) ? 2.10 : 1.04);
+  if (m < 13.5) return STEEL * 0.25;
+  return STEEL * 0.76;
+}
+
+void main(){
+  // uShift slides the whole frustum sideways so the subject can sit clear of
+  // the copy without the camera having to lie about where it is looking.
+  vec2 p = (gl_FragCoord.xy * 2.0 - uRes) / uRes.y + uShift;
+
+  vec3 fw = normalize(uCamTgt - uCamPos);
+  vec3 rt = normalize(cross(fw, vec3(0.0, 1.0, 0.0)));
+  vec3 up = cross(rt, fw);
+  vec3 rd = normalize(p.x * rt + p.y * up + uZoom * fw);
+  vec3 ro = uCamPos;
+
+  // Axis-aligned rays make 1/rd explode; nudging them off the axis is cheaper
+  // than branching inside the traversal loop.
+  vec3 srd = sign(rd) + vec3(equal(rd, vec3(0.0)));
+  vec3 ard = max(abs(rd), vec3(1e-5));
+  rd  = srd * ard;
+  vec3 ri = 1.0 / rd;
+
+  // Clip to the union of the live stations before stepping. A ray that misses
+  // costs nothing, which is what keeps the budget for the ones that hit.
+  vec3 t0 = (uUMin - ro) * ri, t1 = (uUMax + 1.0 - ro) * ri;
+  vec3 ta = min(t0, t1), tb = max(t0, t1);
+  float tEnter = max(max(ta.x, ta.y), max(ta.z, 0.0));
+  float tExit  = min(min(tb.x, tb.y), tb.z);
+
+  vec3  col   = vec3(0.0);
+  float depth = 1.0;
+  float mat   = 0.0;
+  vec3  hitC  = vec3(0.0);
+  vec3  n     = vec3(0.0);
+  float dist  = 0.0;
+
+  if (tExit > tEnter){
+    vec3 org  = ro + rd * (tEnter + 1e-3);
+    vec3 pos  = floor(org);
+    vec3 rs   = sign(rd);
+    vec3 dis  = (pos - org + 0.5 + rs * 0.5) * ri;
+    vec3 mask = vec3(0.0, 0.0, 1.0);
+
+    for (int i = 0; i < ${MAX_STEPS}; i++){
+      float m = solid(pos);
+      if (m > 0.0){ mat = m; hitC = pos; break; }
+      mask = step(dis.xyz, dis.yzx) * step(dis.xyz, dis.zxy);
+      dis += mask * ri * rs;
+      pos += mask * rs;
+      if (any(lessThan(pos, uUMin)) || any(greaterThan(pos, uUMax))) break;
+    }
+
+    if (mat > 0.0){
+      n = -mask * rs;
+      vec3 mini = (hitC - ro + 0.5 - 0.5 * rs) * ri;
+      dist = max(mini.x, max(mini.y, mini.z));
+
+      vec3 base = matColor(mat, hitC);
+      float dif = max(dot(n, normalize(vec3(0.40, 0.80, 0.46))), 0.0);
+      float sky = max(n.y, 0.0);
+      float sourceLight = 0.62 + 0.44 * dif + 0.18 * sky;
+      float worldLight = 0.34 + 0.62 * dif + 0.26 * sky;
+      col  = base * ((mat < 1.5) ? sourceLight : worldLight);
+      // A neutral silhouette lift survives the glyph quantisation without
+      // imposing a synthetic colour fringe on the source render.
+      col += base * 0.18 * pow(max(0.0, -dot(n, rd)), 2.0);
+
+      // The write head: cells being rewritten right now flare, so a station
+
+      // change reads as something happening rather than something replaced.
+      if (uMorph > 0.002 && uMorph < 0.998)
+        col += SHINE * exp(-abs(front(hitC)) * 22.0) * 0.85;
+
+      col  = mix(col, VOIDC * 1.6, 1.0 - exp(-dist * 0.0062));
+      depth = clamp(dist / 200.0, 0.0, 1.0);
+    }
+  }
+
+  if (mat < 0.5){
+    float horizon = smoothstep(-0.35, 0.75, p.y);
+    col = VOIDC * (0.62 + 0.32 * horizon);
+  }
+
+  gl_FragColor = vec4(col, depth);
+}`;
+
+/* Pass 2 — the glyph terminal. One texel of the world per character cell. */
+const ASCII = `
+precision highp float;
+
+uniform sampler2D uScene, uAtlas;
+uniform vec2      uRes, uGrid, uMouse;
+uniform float     uCell, uCount, uTime, uBoot, uLens, uLensR,
+                  uMotion, uWarpK, uReveal;
+
+const vec3 AQUA = vec3(0.455, 0.847, 0.808);
+
+float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
+
+void main(){
+  vec2 px = gl_FragCoord.xy;
+  vec2 toMouse = px - uMouse;
+  float d = length(toMouse) / max(uRes.x, uRes.y);
+  float pull = uWarpK * uMotion * exp(-d * 4.6);
+  vec2 warp = normalize(toMouse + 1e-4) * pull *
+              (4.0 + 2.2 * sin(uTime * 1.15 - d * 16.0));
+
+  vec2 g = (px + warp) / uCell;
+  vec2 cid = floor(g);
+  vec2 inCell = fract(g);
+  vec2 sceneUV = (cid + 0.5) / uGrid;
+  vec4 scene = texture2D(uScene, sceneUV);
+  float lum = dot(scene.rgb, vec3(0.299, 0.587, 0.114));
+
+  float density = clamp(pow(lum * 1.35, 0.62) * (1.0 - 0.34 * scene.a), 0.0, 1.0);
+  float glyph = floor(density * (uCount - 1.0) + 0.5);
+
+  float randomCell = h21(cid);
+  float resolved = smoothstep(0.0, 0.42,
+    uBoot * 1.85 - length(sceneUV - 0.5) * 0.62 - randomCell * 0.44);
+  float randomGlyph = floor(fract(randomCell * 17.3 + floor(uTime * 15.0) * 0.371) * uCount);
+  glyph = clamp(mix(randomGlyph, glyph, resolved), 0.0, uCount - 1.0);
+
+  float ink = texture2D(uAtlas, vec2((glyph + inCell.x) / uCount, inCell.y)).a;
+  vec3 col = scene.rgb * (ink * 1.52 + pow(ink, 0.45) * 0.52);
+  col += ink * lum * vec3(0.02, 0.07, 0.07);
+
+  float radial = length(px / uRes - 0.5) * 1.42;
+  float vignette = 1.0 - smoothstep(0.52, 1.62, radial);
+  col *= 0.72 + 0.28 * vignette;
+
+  // The first two seconds expose the shaded source field before it resolves
+  // into calibrated glyphs. This is a 3D material reveal, not a flat image
+  // crossfade: the source has already been raised into the voxel terrain.
+  if (uReveal > 0.001){
+    vec3 raw = texture2D(uScene, (px + warp) / (uGrid * uCell)).rgb;
+    float sourceReveal = uReveal * (0.72 + 0.28 * smoothstep(0.04, 0.66, lum));
+    col = mix(col, raw * 1.18, sourceReveal);
+  }
+
+  if (uLens > 0.001){
+    float radius = length(px - uMouse);
+    float lensMask = (1.0 - smoothstep(uLensR * 0.80, uLensR, radius)) * uLens;
+    if (lensMask > 0.001){
+      vec3 raw = texture2D(uScene, (px + warp) / (uGrid * uCell)).rgb;
+      col = mix(col, raw * 1.16, lensMask);
+    }
+    float ring = (1.0 - smoothstep(0.0, 2.5, abs(radius - uLensR * 0.90))) * uLens;
+    col += AQUA * ring * 0.62;
+  }
+
+  gl_FragColor = vec4(max(col, 0.0), 1.0);
+}`;
+
+/* ------------------------------------------------------------------ boot -- */
+
+const root   = document.documentElement;
+const canvas = document.getElementById("void");
+const still  = matchMedia("(prefers-reduced-motion: reduce)");
+
+let gl = null;
+try {
+  gl = canvas.getContext("webgl", { antialias: false, alpha: false, depth: false,
+                                    powerPreference: "high-performance" }) ||
+       canvas.getContext("experimental-webgl", { antialias: false, alpha: false });
+} catch (e) { gl = null; }
+
+if (!gl) { root.classList.add("no-gl"); return; }
+if (new URLSearchParams(location.search).has("debug")) root.classList.add("debug");
+
+let softwareRenderer = false;
+try {
+  const rendererInfo = gl.getExtension("WEBGL_debug_renderer_info");
+  const renderer = rendererInfo
+    ? gl.getParameter(rendererInfo.UNMASKED_RENDERER_WEBGL)
+    : "";
+  softwareRenderer = /swiftshader|llvmpipe|software/i.test(renderer || "");
+} catch (error) {
+  softwareRenderer = false;
+}
+
+function compile(type, src){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)){
+    console.error(gl.getShaderInfoLog(s), src);
+    throw new Error("shader");
+  }
+  return s;
+}
+function program(vs, fs){
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
+  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+  gl.bindAttribLocation(p, 0, "aPos");
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)){
+    console.error(gl.getProgramInfoLog(p));
+    throw new Error("link");
+  }
+  return p;
+}
+
+let progScene, progAscii;
+try {
+  progScene = program(VERT, SCENE);
+  progAscii = program(VERT, ASCII);
+} catch (e) {
+  root.classList.remove("gl-ready");
+  root.classList.add("no-gl");
+  return;
+}
+
+const uni = (p, names) => {
+  const o = {};
+  for (const n of names) o[n] = gl.getUniformLocation(p, "u" + n[0].toUpperCase() + n.slice(1));
+  return o;
+};
+const uS = uni(progScene, ["res","shift","camPos","camTgt","uMin","uMax","time",
+                           "worldA","worldB","morph","phase","cut","focus",
+                           "inflate","split","zoom","relief","mark"]);
+const uA = uni(progAscii, ["scene","atlas","res","grid","mouse","cell","count",
+                           "time","boot","lens","lensR","motion","warpK","reveal"]);
+
+const quad = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0);
+gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+/* ------------------------------------------------------------- the atlas -- */
+
+/* The ramp is calibrated at load, not hard-coded: each candidate glyph is drawn
+ * once, its ink coverage measured, and the set resampled to be even in
+ * coverage. A ramp tuned against one font goes visibly wrong on another, and
+ * this page ships no font. */
+function buildAtlas(){
+  const CANDIDATES = " .'`^\",:;!i~+_-?][}{)(|/\\tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
+  const probe = document.createElement("canvas");
+  probe.width = probe.height = 32;
+  const pc = probe.getContext("2d", { willReadFrequently: true });
+  const font = w => `${w} 26px ui-monospace,"DejaVu Sans Mono",Menlo,Consolas,monospace`;
+
+  const measured = [];
+  for (const ch of CANDIDATES){
+    pc.clearRect(0, 0, 32, 32);
+    pc.fillStyle = "#fff";
+    pc.font = font(700);
+    pc.textAlign = "center";
+    pc.textBaseline = "middle";
+    pc.fillText(ch, 16, 17);
+    const d = pc.getImageData(0, 0, 32, 32).data;
+    let s = 0;
+    for (let i = 3; i < d.length; i += 4) s += d[i];
+    measured.push({ ch, cov: s / (32 * 32 * 255) });
+  }
+  measured.sort((a, b) => a.cov - b.cov);
+
+  // Resample to N glyphs evenly spaced in coverage, then force index 0 blank so
+  // empty cells stay empty instead of showing the densest glyph.
+  const N = 14;
+  const top = measured[measured.length - 1].cov || 1;
+  const ramp = [" "];
+  for (let i = 1; i < N; i++){
+    const want = (i / (N - 1)) * top;
+    let best = measured[0], bd = 1e9;
+    for (const m of measured){
+      const dd = Math.abs(m.cov - want);
+      if (dd < bd && !ramp.includes(m.ch)) { bd = dd; best = m; }
+    }
+    ramp.push(best.ch);
+  }
+
+  const CELL = 44;
+  const c = document.createElement("canvas");
+  c.width = CELL * N; c.height = CELL;
+  const ctx = c.getContext("2d");
+  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.fillStyle = "#fff";
+  ctx.font = `700 ${Math.round(CELL * 0.86)}px ui-monospace,"DejaVu Sans Mono",Menlo,Consolas,monospace`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (let i = 1; i < N; i++) ctx.fillText(ramp[i], i * CELL + CELL / 2, CELL * 0.53);
+
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  return { tex: t, count: N, ramp: ramp.join("") };
+}
+
+/* The wordmark, rasterised at load into a mask the marcher extrudes. Same
+ * substance as the rest of the world: it is cells, not type over a picture. */
+function buildMark(){
+  const W = 768, H = 256;
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = '600 38px ui-monospace,"DejaVu Sans Mono",Menlo,Consolas,monospace';
+  ctx.fillText("IBVOID", W / 2, 58);
+  ctx.font = '800 94px ui-monospace,"DejaVu Sans Mono",Menlo,Consolas,monospace';
+  ctx.fillText("AF26C13", W / 2, 166);
+
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return t;
+}
+
+function loadTexture(url){
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+                new Uint8Array([12, 12, 12, 255]));
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const img = new Image();
+  img.onload = () => {
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+    reliefReady = true;
+    invalidate();
+  };
+  img.onerror = () => failGL(new Error("relief texture failed to load"));
+  img.src = url;
+  return t;
+}
+
+const atlas = buildAtlas();
+const texMark = buildMark();
+let reliefReady = false;
+const texRel = loadTexture("assets/tex-relief.jpg");
+
+/* --------------------------------------------------------- the framebuffer -- */
+
+const fbo    = gl.createFramebuffer();
+const fboTex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, fboTex);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fboTex, 0);
+gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+let dpr = 1, cellPx = 9, gridW = 1, gridH = 1;
+let ss = softwareRenderer ? 1 : 2;
+let fboW = 1, fboH = 1;
+let quality = softwareRenderer ? 0.60 : 1;
+
+function resize(){
+  const cssW = Math.max(1, canvas.clientWidth);
+  const cssH = Math.max(1, canvas.clientHeight);
+  const pixelCap = Math.sqrt(MAX_CANVAS_PIXELS / (cssW * cssH));
+  dpr = Math.max(0.5, Math.min(window.devicePixelRatio || 1, DPR_CAP, pixelCap) * quality);
+  const w = Math.max(1, Math.round(cssW * dpr));
+  const h = Math.max(1, Math.round(cssH * dpr));
+  cellPx = Math.max(4, Math.round(CELL_CSS * dpr));
+  const nw = Math.ceil(w / cellPx), nh = Math.ceil(h / cellPx);
+  if (canvas.width !== w || canvas.height !== h || nw !== gridW || nh !== gridH){
+    canvas.width = w; canvas.height = h;
+    gridW = nw; gridH = nh;
+    allocScene();
+  }
+}
+function allocScene(){
+  fboW = gridW * ss;
+  fboH = gridH * ss;
+  gl.bindTexture(gl.TEXTURE_2D, fboTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fboW, fboH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  if (status !== gl.FRAMEBUFFER_COMPLETE) throw new Error("framebuffer incomplete: " + status);
+}
+
+/* ---------------------------------------------------------- choreography -- */
+
+/* Camera per station, plus the frustum shift that keeps the subject clear of the
+
+ * copy. Authored here rather than in the shader because the timing and the
+ * framing are design decisions and want to be editable in one place. `shift` is
+ * in half-height units and pushes the subject the opposite way, so a negative x
+ * moves the world to the right of the screen. */
+function camera(w, t, mx, my){
+  const e = t * t * (3 - 2 * t);
+  switch (w){
+    // 00 swings from almost straight down — where a relief map reads as a face
+    // — to a low raking angle over the same ground, which is where 01 picks it
+    // up. The descent is the station; there is nothing else to look at.
+    case 0:
+      return { pos: [mx * 10, 96 - e * 52, 26 + e * 52],
+               tgt: [0, 5 + e * 5, -4 - e * 8],
+               zoom: 1.15 + e * 0.22, shift: [-0.42, 0.02] };
+    case 1:                                       // raking over the rows
+      return { pos: [mx * 10, 37 - e * 4, 66 - e * 7],
+               tgt: [0, 4, 12 - e * 3], zoom: 1.52, shift: [0.38, -0.12] };
+    case 2:                                       // pulled back for both lanes
+      return { pos: [mx * 8, 46 - e * 5, 74 - e * 8],
+               tgt: [0, 3, 0], zoom: 1.34, shift: [-0.34, -0.06] };
+    case 3:                                       // trucking past upstream
+      return { pos: [-8 + e * 16 + mx * 8, 16 + my * 6, 54 - e * 4],
+               tgt: [-8 + e * 16, 14, 0], zoom: 1.62, shift: [0.40, -0.04] };
+    case 4:                                       // trucking past the works
+      return { pos: [-8 + e * 16 + mx * 9, 18 + my * 7, 54 - e * 4],
+               tgt: [-8 + e * 16, 13, 0], zoom: 1.35, shift: [0.42, -0.02] };
+    default:                                      // into the mark
+      return { pos: [mx * 9, 20 + my * 6, 98 - e * 32],
+               tgt: [0, 18, 2], zoom: 1.30, shift: [-0.30, -0.06] };
+  }
+}
+
+/* Two stations are live through a boundary, so the camera has to be too. */
+function blendCam(a, b, k){
+  const L = (u, v) => [u[0] + (v[0] - u[0]) * k, u[1] + (v[1] - u[1]) * k,
+                       u.length > 2 ? u[2] + (v[2] - u[2]) * k : 0];
+  return { pos: L(a.pos, b.pos), tgt: L(a.tgt, b.tgt),
+           zoom: a.zoom + (b.zoom - a.zoom) * k,
+           shift: [a.shift[0] + (b.shift[0] - a.shift[0]) * k,
+                   a.shift[1] + (b.shift[1] - a.shift[1]) * k] };
+}
+
+/* ------------------------------------------------------------------ state -- */
+
+const S = {
+  act: 0, actTarget: 0,
+  mouse: [0.5, 0.5], mouseSmooth: [0.5, 0.5],
+  lens: 0, lensWant: 0,
+  motion: still.matches ? 0 : 1,
+  focus: -1,
+  boot: 0,
+  t0: performance.now(),
+  frames: 0, fpsAt: performance.now(), fps: 0,
+  slowRuns: 0,
+  lastFrame: performance.now(),
+};
+
+let raf = 0;
+let pageVisible = !document.hidden;
+let frameFailed = false;
+let firstFrame = false;
+
+const hud = {
+  station: document.getElementById("hud-station"),
+  name:    document.getElementById("hud-name"),
+  grid:    document.getElementById("hud-grid"),
+  fps:     document.getElementById("hud-fps"),
+  ramp:    document.getElementById("hud-ramp"),
+};
+const STATION_NAMES = ["arrival", "measurement", "the split",
+                       "upstream", "the works", "proof"];
+const ticks = Array.from(document.querySelectorAll(".rail-tick"));
+
+if (hud.ramp) hud.ramp.textContent = atlas.ramp.trim().slice(0, 13);
+
+/* Act position is measured off the sections themselves rather than off a
+ * percentage of the document. Sections can then be different heights — the one
+ * carrying the table needs more room than the one carrying a sentence — and a
+ * station boundary still lands exactly where the copy changes. */
+const sections = Array.from(document.querySelectorAll(".station"));
+let bands = [];
+
+function measure(){
+  let y = 0;
+  bands = sections.map(el => {
+    const r = el.getBoundingClientRect();
+    y = r.top + window.scrollY;
+    return { top: y, h: Math.max(1, r.height) };
+  });
+}
+
+function readScroll(){
+  if (!bands.length) return;
+  const eye = window.scrollY + window.innerHeight * 0.5;
+  let i = bands.length - 1;
+  for (let k = 0; k < bands.length; k++){
+    if (eye < bands[k].top + bands[k].h){ i = k; break; }
+  }
+  const local = Math.min(1, Math.max(0, (eye - bands[i].top) / bands[i].h));
+  S.actTarget = Math.min(STATIONS - 0.001, i + local);
+}
+addEventListener("scroll", () => { readScroll(); invalidate(); }, { passive: true });
+addEventListener("resize", () => { resize(); measure(); readScroll(); invalidate(); }, { passive: true });
+
+addEventListener("pointermove", event => {
+  const r = canvas.getBoundingClientRect();
+  S.mouse = [(event.clientX - r.left) / r.width, 1 - (event.clientY - r.top) / r.height];
+  invalidate();
+}, { passive: true });
+
+function markLensUsed(){
+  root.classList.add("lens-used");
+}
+
+addEventListener("pointerdown", event => {
+  if (event.button !== 0) return;
+  S.lensWant = 1;
+  markLensUsed();
+  invalidate();
+}, { passive: true });
+addEventListener("pointerup", () => {
+  S.lensWant = lensLatched ? 1 : 0;
+  invalidate();
+}, { passive: true });
+addEventListener("pointercancel", () => {
+  S.lensWant = lensLatched ? 1 : 0;
+  invalidate();
+}, { passive: true });
+
+const btnLens   = document.getElementById("btn-lens");
+const btnMotion = document.getElementById("btn-motion");
+let lensLatched = false;
+
+function setLens(on){
+  lensLatched = on;
+  S.lensWant = on ? 1 : 0;
+  if (btnLens) btnLens.setAttribute("aria-pressed", String(on));
+  invalidate();
+}
+function setMotion(on){
+  S.motion = on ? 1 : 0;
+  root.classList.toggle("no-motion", !on);
+  if (btnMotion) btnMotion.setAttribute("aria-pressed", String(on));
+  invalidate();
+}
+
+if (btnLens) btnLens.addEventListener("click", () => {
+  setLens(!lensLatched);
+  markLensUsed();
+});
+if (btnMotion) btnMotion.addEventListener("click", () => setMotion(!S.motion));
+
+const lensCue = document.getElementById("lens-cue");
+if (lensCue) lensCue.addEventListener("click", () => setLens(!lensLatched));
+
+const onMotionPreference = event => setMotion(!event.matches);
+if (still.addEventListener) still.addEventListener("change", onMotionPreference);
+else if (still.addListener) still.addListener(onMotionPreference);
+
+setMotion(!still.matches);
+
+addEventListener("keydown", e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const tag = (e.target && e.target.tagName) || "";
+  if (tag === "INPUT" || tag === "TEXTAREA") return;
+  if (e.key === "l" || e.key === "L"){ setLens(!lensLatched); }
+  if (e.key === "m" || e.key === "M"){ setMotion(!S.motion); }
+});
+
+// Hovering or focusing a work lights its object in the scene. The list and the
+// world are the same data; keeping them wired is cheap and the link is the joke.
+document.querySelectorAll("[data-work]").forEach(el => {
+  const i = parseInt(el.dataset.work, 10);
+  const on  = () => { S.focus = i; invalidate(); };
+  const off = () => { S.focus = -1; invalidate(); };
+  el.addEventListener("pointerenter", on);
+  el.addEventListener("pointerleave", off);
+  el.addEventListener("focusin", on);
+  el.addEventListener("focusout", off);
+});
+
+/* ------------------------------------------------------------------ frame -- */
+
+const damp = (a, b, rate, dt) => a + (b - a) * (1 - Math.exp(-rate * dt));
+
+function failGL(error){
+  if (frameFailed) return;
+  frameFailed = true;
+  if (raf) cancelAnimationFrame(raf);
+  raf = 0;
+  root.classList.remove("gl-ready");
+  root.classList.add("gl-failed");
+  console.error(error);
+}
+
+function invalidate(){
+  if (!raf && pageVisible && !frameFailed) raf = requestAnimationFrame(draw);
+}
+
+function draw(now){
+  raf = 0;
+  if (frameFailed || !pageVisible) return;
+
+  try {
+    resize();
+
+    const dt = Math.min(0.05, Math.max(0.001, (now - S.lastFrame) / 1000));
+    S.lastFrame = now;
+    const time = (now - S.t0) / 1000;
+    const reduced = S.motion < 0.5;
+
+    S.boot = reduced ? 1 : Math.min(1, time / 2.8);
+    S.act = reduced ? S.actTarget : damp(S.act, S.actTarget, 7.2, dt);
+    S.mouseSmooth[0] = reduced ? S.mouse[0] : damp(S.mouseSmooth[0], S.mouse[0], 8.0, dt);
+    S.mouseSmooth[1] = reduced ? S.mouse[1] : damp(S.mouseSmooth[1], S.mouse[1], 8.0, dt);
+    S.lens = damp(S.lens, S.lensWant, 12.0, dt);
+
+    const wi = Math.min(STATIONS - 1, Math.floor(S.act));
+    const splitProgress = smooth(2.04, 2.76, S.act);
+    const boundary = Math.round(S.act);
+    let wa = wi, wb = wi, morph = 0;
+    if (boundary >= 1 && boundary <= STATIONS - 1 &&
+        Math.abs(S.act - boundary) < BAND){
+      wa = boundary - 1;
+      wb = boundary;
+      morph = (S.act - (boundary - BAND)) / (2 * BAND);
+    }
+
+    const A = WORLDS[wa], B = WORLDS[wb];
+    const uMin = [Math.min(A.min[0], B.min[0]), Math.min(A.min[1], B.min[1]),
+                  Math.min(A.min[2], B.min[2])];
+    const uMax = [Math.max(A.max[0], B.max[0]), Math.max(A.max[1], B.max[1]),
+                  Math.max(A.max[2], B.max[2])];
+
+    const mx = reduced ? 0 : (S.mouseSmooth[0] - 0.5) * 2;
+    const my = reduced ? 0 : (S.mouseSmooth[1] - 0.5) * 2;
+    const intro = reduced ? 1 : smooth(0.08, 0.92, S.boot);
+    const localA = wa === 0 ? Math.max(S.act - wa, intro * 0.68) : S.act - wa;
+    let cam = wa === wb
+      ? camera(wa, localA, mx, my)
+      : blendCam(camera(wa, Math.min(1, localA), mx, my),
+                 camera(wb, Math.max(0, S.act - wb), mx, my),
+                 smooth(0, 1, morph));
+    if (innerWidth < 900) cam.shift = [0, 0.10];
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.viewport(0, 0, fboW, fboH);
+    gl.useProgram(progScene);
+    gl.uniform2f(uS.res, fboW, fboH);
+    gl.uniform2fv(uS.shift, cam.shift);
+    gl.uniform3fv(uS.camPos, cam.pos);
+    gl.uniform3fv(uS.camTgt, cam.tgt);
+    gl.uniform3fv(uS.uMin, uMin);
+    gl.uniform3fv(uS.uMax, uMax);
+    gl.uniform1f(uS.time, reduced ? 4.0 : time);
+    gl.uniform1f(uS.worldA, wa);
+    gl.uniform1f(uS.worldB, wb);
+    gl.uniform1f(uS.morph, morph);
+    gl.uniform1f(uS.phase, reduced ? 0 : time * 2.2);
+    gl.uniform1f(uS.cut, 0);
+    gl.uniform1f(uS.focus, S.focus);
+    gl.uniform1f(uS.inflate, wi === 0 ? (reduced ? 1 : smooth(0.08, 0.94, S.boot)) : 1);
+    gl.uniform1f(uS.split, splitProgress);
+    gl.uniform1f(uS.zoom, cam.zoom);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texRel);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, texMark);
+    gl.uniform1i(uS.relief, 0);
+    gl.uniform1i(uS.mark, 1);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.useProgram(progAscii);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, fboTex);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, atlas.tex);
+    gl.uniform1i(uA.scene, 0);
+    gl.uniform1i(uA.atlas, 1);
+    gl.uniform2f(uA.res, canvas.width, canvas.height);
+    gl.uniform2f(uA.grid, gridW, gridH);
+    gl.uniform2f(uA.mouse, S.mouseSmooth[0] * canvas.width, S.mouseSmooth[1] * canvas.height);
+    gl.uniform1f(uA.cell, cellPx);
+    gl.uniform1f(uA.count, atlas.count);
+    gl.uniform1f(uA.time, reduced ? 0 : time);
+    gl.uniform1f(uA.boot, S.boot);
+    gl.uniform1f(uA.lens, S.lens);
+    gl.uniform1f(uA.lensR, Math.min(canvas.width, canvas.height) * 0.19);
+    gl.uniform1f(uA.motion, S.motion);
+    gl.uniform1f(uA.warpK, reduced ? 0 : 0.50);
+    gl.uniform1f(uA.reveal, reduced ? 0 : 1.0 - smooth(0.18, 0.88, S.boot));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    if (!firstFrame && reliefReady){
+      firstFrame = true;
+      root.classList.add("gl-ready");
+    }
+
+    S.frames++;
+    if (now - S.fpsAt > 650){
+      S.fps = Math.round(S.frames * 1000 / (now - S.fpsAt));
+      S.frames = 0;
+      S.fpsAt = now;
+      if (hud.fps) hud.fps.textContent = S.fps + " fps";
+      if (S.fps < 46 && ss === 2 && ++S.slowRuns >= 3){
+        ss = 1;
+        S.slowRuns = 0;
+        allocScene();
+      } else if (S.fps < 40 && ss === 1 && quality > 0.76 && ++S.slowRuns >= 3){
+        quality = 0.75;
+        S.slowRuns = 0;
+        resize();
+      } else if (S.fps < 32 && quality > 0.61 && ++S.slowRuns >= 3){
+        quality = 0.60;
+        S.slowRuns = 0;
+        resize();
+      } else if (S.fps >= 46) {
+        S.slowRuns = 0;
+      }
+      if (hud.grid) {
+        hud.grid.textContent = gridW + "×" + gridH + " · ss " + ss + "× · q " + quality;
+      }
+    }
+
+    const chapter = Math.max(0, Math.min(STATIONS - 1,
+      Math.round(S.act - 0.5 + 0.001)));
+    if (hud.station && hud.station.dataset.i !== String(chapter)){
+      hud.station.dataset.i = String(chapter);
+      hud.station.textContent = String(chapter).padStart(2, "0");
+      if (hud.name) hud.name.textContent = STATION_NAMES[chapter];
+      root.dataset.station = String(chapter);
+      sections.forEach((section, i) => section.classList.toggle("is-active", i === chapter));
+      ticks.forEach((tick, i) => {
+        tick.setAttribute("aria-current", i === chapter ? "true" : "false");
+      });
+    }
+
+    const unsettled = Math.abs(S.act - S.actTarget) > 0.001 ||
+                      Math.abs(S.mouseSmooth[0] - S.mouse[0]) > 0.001 ||
+                      Math.abs(S.mouseSmooth[1] - S.mouse[1]) > 0.001 ||
+                      Math.abs(S.lens - S.lensWant) > 0.001 ||
+                      S.boot < 1;
+    if (S.motion > 0.5 || unsettled) invalidate();
+  } catch (error) {
+    failGL(error);
+  }
+}
+
+function smooth(a, b, x){
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+
+try {
+  resize();
+  measure();
+  readScroll();
+  invalidate();
+} catch (error) {
+  failGL(error);
+}
+
+addEventListener("load", () => {
+  measure();
+  readScroll();
+  invalidate();
+});
+
+document.addEventListener("visibilitychange", () => {
+  pageVisible = !document.hidden;
+  S.lastFrame = performance.now();
+  if (pageVisible) invalidate();
+});
+
+canvas.addEventListener("webglcontextlost", event => {
+  event.preventDefault();
+  frameFailed = true;
+  root.classList.remove("gl-ready");
+  root.classList.add("gl-failed");
+});
+
+canvas.addEventListener("webglcontextrestored", () => location.reload());
+
+})();
+
+

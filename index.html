@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IBVOID — Ahmed Mohamed / systems, compilers, renderers</title>
+  <meta name="description" content="Ahmed Mohamed builds the layer underneath: compiler work landed in Go, systems projects in Rust and C, and a live WebGL ASCII renderer.">
+  <meta name="theme-color" content="#090a09">
+  <link rel="canonical" href="https://iblackvoid.github.io/">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://iblackvoid.github.io/">
+  <meta property="og:title" content="IBVOID — the layer underneath">
+  <meta property="og:description" content="A Pixel-Ripper frame becomes terrain, measurement data, a compiler fix, and the systems built beneath it.">
+  <meta property="og:image" content="https://iblackvoid.github.io/assets/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="IBVOID — the layer underneath">
+  <meta name="twitter:description" content="Systems, compilers, renderers. One continuous WebGL instrument.">
+  <meta name="twitter:image" content="https://iblackvoid.github.io/assets/og.jpg">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23090a09'/%3E%3Cpath d='M7 7h6v18H7zm12 7h6v11h-6z' fill='%2374d8ce'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="void.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to the story</a>
+
+  <div class="stage" aria-hidden="true">
+    <canvas id="void"></canvas>
+    <div id="poster"></div>
+    <div class="stage-wash"></div>
+  </div>
+
+  <header class="topbar">
+    <a class="brand" href="#arrival">
+      <strong>IBVOID</strong>
+      <span>Ahmed Mohamed</span>
+    </a>
+    <p class="top-note">the layer underneath</p>
+    <a class="top-link" href="https://github.com/IBlackVoid">GitHub <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <nav class="chapter-rail" aria-label="Story chapters">
+    <span class="chapter-number" id="hud-station" aria-hidden="true">00</span>
+    <ol>
+      <li><a class="rail-tick" href="#arrival" aria-current="true"><span>arrival</span></a></li>
+      <li><a class="rail-tick" href="#measurement"><span>measurement</span></a></li>
+      <li><a class="rail-tick" href="#split"><span>the split</span></a></li>
+      <li><a class="rail-tick" href="#upstream"><span>upstream</span></a></li>
+      <li><a class="rail-tick" href="#works"><span>the works</span></a></li>
+      <li><a class="rail-tick" href="#proof"><span>proof</span></a></li>
+    </ol>
+    <span class="chapter-name" id="hud-name" aria-hidden="true">arrival</span>
+  </nav>
+
+  <main id="main">
+    <section class="station station-arrival" id="arrival">
+      <div class="engine-stamp" aria-label="Pixel-Ripper engine output metadata">
+        <span>transformed source frame / engine output</span>
+        <strong>PIXEL-RIPPER</strong>
+        <span>V20 PURE · C · 1600×1592</span>
+      </div>
+
+      <div class="story story-arrival">
+        <p class="eyebrow">Ahmed Mohamed · systems engineer</p>
+        <h1 id="hero-line">I build the<br><em>layer underneath.</em></h1>
+        <p class="hero-lede">Compilers. Runtimes. Renderers. When a constant is a guess,
+          I measure it. When a layer hides the hard part, I implement it.</p>
+        <div class="proof-line">
+          <a href="https://github.com/golang/go/commit/af26c13f95404eeb6cb512b8710c31f7781f850c">
+            <span>landed in golang/go</span>
+            <strong>AF26C13</strong>
+          </a>
+          <span>Rust · C · Go</span>
+        </div>
+      </div>
+
+      <button class="lens-cue" id="lens-cue" type="button">
+        <span class="cue-ring" aria-hidden="true"></span>
+        <span><strong>press + hold</strong> reveal the shaded world</span>
+      </button>
+      <a class="scroll-cue" href="#measurement"><span>enter the measurement</span><i aria-hidden="true"></i></a>
+    </section>
+
+    <section class="station station-measurement" id="measurement">
+      <article class="story story-measurement">
+        <p class="eyebrow">01 / measured, not guessed</p>
+        <h2>The comment admitted there was no theory behind 32.</h2>
+        <p>Go keeps non-escaping string results in a fixed stack buffer. If the
+          result is larger, the operation spills to the heap. The same 32-byte
+          number had stood since 2015.</p>
+        <p>I instrumented the runtime by helper and result size, then ran five
+          real workloads. The field behind this text is a procedural reconstruction
+          sampled from the six measured buckets at their exact observed proportions.</p>
+      </article>
+
+      <figure class="distribution" aria-labelledby="distribution-title">
+        <figcaption id="distribution-title">
+          <span>self-compile / stack-eligible concatenations</span>
+          <strong>n = 115,462</strong>
+        </figcaption>
+        <ol>
+          <li style="--share:67.94%"><span>≤32</span><strong>78,438</strong></li>
+          <li class="spill" style="--share:13.81%"><span>33–48</span><strong>15,948</strong></li>
+          <li class="spill" style="--share:7.22%"><span>49–64</span><strong>8,333</strong></li>
+          <li class="spill" style="--share:8.02%"><span>65–128</span><strong>9,259</strong></li>
+          <li class="spill" style="--share:1.63%"><span>129–256</span><strong>1,881</strong></li>
+          <li class="spill" style="--share:1.39%"><span>&gt;256</span><strong>1,603</strong></li>
+        </ol>
+        <p><i aria-hidden="true"></i> the fault line is 32 bytes; every orange request crossed it</p>
+      </figure>
+    </section>
+
+    <section class="station station-split" id="split">
+      <div class="fault-title" aria-label="String temporary buffer changed from 32 to 64 bytes">
+        <span>32</span>
+        <i aria-hidden="true">→</i>
+        <span>64</span>
+        <small>bytes / string temporary buffer</small>
+      </div>
+
+      <article class="story story-split">
+        <p class="eyebrow">02 / the memory faultline</p>
+        <h2>The obvious fix was wrong.</h2>
+        <p>Widening the shared constant also widened the <code>string → []rune</code>
+          buffer. A rune costs four bytes, so 64 elements would add 128 bytes to
+          every one of those frames for almost no gain.</p>
+        <p>The real fix was the split: strings move to 64 bytes; runes remain
+          32 elements. Two jobs stop pretending to be one number.</p>
+        <a class="case-link" href="https://github.com/golang/go/commit/af26c13f95404eeb6cb512b8710c31f7781f850c">
+          <span>five files · reviewed and merged</span>
+          <strong>golang/go · af26c13 ↗</strong>
+        </a>
+      </article>
+
+      <div class="rune-proof">
+        <span>rune lane</span>
+        <strong>32 runes</strong>
+        <i>= 128 B of stack</i>
+        <b>unchanged</b>
+      </div>
+
+      <dl class="impact-strip">
+        <div><dt>compiler self-build</dt><dd>21.0%</dd><small>concats newly fit</small></div>
+        <div><dt>stdlib tests</dt><dd>37.1%</dd><small>concats newly fit</small></div>
+        <div><dt>byte → string</dt><dd>53.5%</dd><small>conversions newly fit</small></div>
+      </dl>
+    </section>
+
+    <section class="station station-upstream" id="upstream">
+      <article class="story story-upstream">
+        <p class="eyebrow">03 / upstream</p>
+        <h2>A patch becomes part of the trunk.</h2>
+        <p>One landed. Three remain visible as review branches. The scene keeps
+          that distinction literal: merged work is structural; review work is
+          still luminous and open.</p>
+      </article>
+
+      <ol class="upstream-list">
+        <li class="is-merged">
+          <a href="https://github.com/golang/go/commit/af26c13f95404eeb6cb512b8710c31f7781f850c">
+            <span>golang/go · runtime, cmd/compile</span>
+            <strong>AF26C13</strong>
+            <em>merged · 2026-07-27</em>
+          </a>
+        </li>
+        <li>
+          <a href="https://go-review.googlesource.com/c/go/+/805760">
+            <span>golang/go · types2</span>
+            <strong>CL 805760</strong>
+            <em>open Gerrit CL</em>
+          </a>
+        </li>
+        <li>
+          <a href="https://github.com/facebook/stylex/pull/1758">
+            <span>facebook/stylex · eslint</span>
+            <strong>PR 1758</strong>
+            <em>open PR · CLA passed</em>
+          </a>
+        </li>
+        <li>
+          <a href="https://chromium-review.googlesource.com/c/crosvm/crosvm/+/8090096">
+            <span>google/crosvm · virtio-gpu</span>
+            <strong>CL 8090096</strong>
+            <em>open Gerrit CL</em>
+          </a>
+        </li>
+      </ol>
+    </section>
+
+    <section class="station station-works" id="works">
+      <article class="story story-works">
+        <p class="eyebrow">04 / four machines</p>
+        <h2>The hard layer is the project.</h2>
+        <p>Each form in the scene follows the machine it represents. Hover or
+          focus a project and its mechanism takes the light.</p>
+      </article>
+
+      <div class="project-grid">
+        <a class="project" data-work="0" href="https://github.com/IBlackVoid/VoiDex">
+          <span class="project-index">01 / rust</span>
+          <h3>VoiDex</h3>
+          <p>Offline subtitle engine: audio becomes timed text, local all the way
+            through, with an auditable quality sidecar.</p>
+          <strong>12–22× real-time · RTX 4070</strong>
+        </a>
+        <a class="project" data-work="1" href="https://github.com/IBlackVoid/Pixel-Ripper">
+          <span class="project-index">02 / c</span>
+          <h3>Pixel-Ripper</h3>
+          <p>Image and video to ASCII: SSSE3 pixel paths, pthread frame
+            parallelism, arena allocation in the hot loops.</p>
+          <strong>the opening field is its transformed output</strong>
+        </a>
+        <a class="project" data-work="2" href="https://github.com/IBlackVoid/Aethelred">
+          <span class="project-index">03 / rust</span>
+          <h3>Aethelred</h3>
+          <p>Linux container runtime: namespaces inside namespaces,
+            <code>pivot_root</code>, daemon and CLI across six crates.</p>
+          <strong>the runtime layer, implemented</strong>
+        </a>
+        <a class="project" data-work="3" href="https://github.com/IBlackVoid/Helios">
+          <span class="project-index">04 / rust</span>
+          <h3>Helios</h3>
+          <p>Distributed KV store: RESP-like protocol, append-only log,
+            primary/replica flow, Raft-inspired election.</p>
+          <strong>the write travels through the ring</strong>
+        </a>
+      </div>
+    </section>
+
+    <section class="station station-proof" id="proof">
+      <div class="final-mark" aria-hidden="true">
+        <span>engineer / artifact</span>
+        <strong>IBVOID</strong>
+      </div>
+
+      <article class="story story-proof">
+        <p class="eyebrow">05 / merged artifact</p>
+        <h2><a href="https://github.com/golang/go/commit/af26c13f95404eeb6cb512b8710c31f7781f850c">AF26C13</a></h2>
+        <p>This is the exact commit that moved the measured buffer split into
+          Go's trunk. I am looking for systems, compiler, and performance
+          engineering work where the layer underneath is the one that matters.</p>
+        <nav class="final-links" aria-label="Contact and source">
+          <a href="https://github.com/IBlackVoid">GitHub ↗</a>
+          <a href="mailto:ahmed.ahmed32005@gmail.com">Email ↗</a>
+          <a href="https://github.com/golang/go/commit/af26c13f95404eeb6cb512b8710c31f7781f850c">Go commit ↗</a>
+          <a href="https://github.com/IBlackVoid/Pixel-Ripper">Pixel-Ripper ↗</a>
+        </nav>
+        <details>
+          <summary>how this instrument is drawn</summary>
+          <p>A voxel field is raymarched at character-grid resolution, then a
+            second pass stamps a runtime-calibrated glyph ramp at display
+            resolution. The opening terrain uses a Pixel-Ripper render as a
+            height field. No framework and no third-party runtime requests.</p>
+        </details>
+      </article>
+
+      <footer class="site-footer">
+        <span>Ahmed Mohamed · IBVOID</span>
+        <span>designed and engineered in the layer underneath</span>
+      </footer>
+    </section>
+  </main>
+
+  <div class="controls" aria-label="Visual controls">
+    <button id="btn-lens" type="button" aria-pressed="false">
+      <span aria-hidden="true">◉</span> lens
+    </button>
+    <button id="btn-motion" type="button" aria-pressed="true">
+      <span aria-hidden="true">↝</span> motion
+    </button>
+  </div>
+
+  <aside class="debug-hud" aria-hidden="true">
+    <span id="hud-grid">—</span>
+    <span id="hud-fps">—</span>
+    <span id="hud-ramp"></span>
+  </aside>
+
+  <script src="void.js" defer></script>
+</body>
+</html>
+
+
