@@ -1,0 +1,13 @@
+{
+  "name": "iblackvoid-portfolio",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "build": "node scripts/build-sites.mjs",
+    "test:sites": "node --test tests/sites-worker.test.mjs"
+  }
+}
