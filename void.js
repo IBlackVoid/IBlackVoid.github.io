@@ -20,6 +20,8 @@ const CELL_CSS = 9;          // glyph cell, in CSS pixels
 const DPR_CAP  = 2;
 const MAX_CANVAS_PIXELS = 3000000;
 const MAX_STEPS = 112;
+const MIN_STEPS = 44;        // below this the far field visibly truncates
+const MIN_QUALITY = 0.45;
 
 // Cell coordinates are world units, so bounds are read directly by the marcher.
 // Tight bounds are the main perf lever: a ray that misses the box never steps.
@@ -55,7 +57,7 @@ precision highp float;
 uniform vec2      uRes, uShift;
 uniform vec3      uCamPos, uCamTgt, uUMin, uUMax;
 uniform float     uTime, uWorldA, uWorldB, uMorph, uPhase, uCut, uFocus,
-                  uInflate, uSplit, uZoom;
+                  uInflate, uSplit, uZoom, uMaxSteps;
 uniform sampler2D uRelief, uMark;
 
 const vec3 VOIDC = vec3(0.047, 0.047, 0.047);
@@ -319,6 +321,11 @@ void main(){
     vec3 mask = vec3(0.0, 0.0, 1.0);
 
     for (int i = 0; i < ${MAX_STEPS}; i++){
+      // GLSL ES 1.0 requires a constant loop bound, so the ceiling is baked in
+      // and the real budget is a uniform break. That lets the frame-time
+      // governor trade march distance at runtime — far cheaper than dropping
+      // resolution, because this loop is the whole per-fragment cost.
+      if (float(i) >= uMaxSteps) break;
       float m = solid(pos);
       if (m > 0.0){ mat = m; hitC = pos; break; }
       mask = step(dis.xyz, dis.yzx) * step(dis.xyz, dis.zxy);
@@ -496,7 +503,7 @@ const uni = (p, names) => {
 };
 const uS = uni(progScene, ["res","shift","camPos","camTgt","uMin","uMax","time",
                            "worldA","worldB","morph","phase","cut","focus",
-                           "inflate","split","zoom","relief","mark"]);
+                           "inflate","split","zoom","maxSteps","relief","mark"]);
 const uA = uni(progAscii, ["scene","atlas","res","grid","mouse","cell","count",
                            "time","boot","lens","lensR","motion","warpK","reveal"]);
 
@@ -639,16 +646,42 @@ gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
 gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fboTex, 0);
 gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
+/* Handhelds have real GPUs, so the software-renderer probe above never fires
+ * on them — a Pixel reports Adreno, an iPhone reports Apple GPU, and both were
+ * getting the desktop budget. They are fill-rate poor and run at DPR 2-3, the
+ * exact combination this raymarcher punishes. Start them low and let the
+ * governor climb, rather than opening at full cost and stuttering through the
+ * first seconds, which is the part of the page that has to land. */
+const handheld = (() => {
+  const coarse = matchMedia("(pointer: coarse)").matches;
+  const narrow = Math.min(screen.width, screen.height) <= 820;
+  const thin = (navigator.hardwareConcurrency || 8) <= 6;
+  let mobileGpu = false;
+  try {
+    const info = gl.getExtension("WEBGL_debug_renderer_info");
+    const name = info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : "";
+    mobileGpu = /adreno|mali|powervr|apple *(a\d|m\d|gpu)|tegra/i.test(name || "");
+  } catch { mobileGpu = false; }
+  return mobileGpu || (coarse && (narrow || thin));
+})();
+
 let dpr = 1, cellPx = 9, gridW = 1, gridH = 1;
-let ss = softwareRenderer ? 1 : 2;
+let ss = (softwareRenderer || handheld) ? 1 : 2;
 let fboW = 1, fboH = 1;
-let quality = softwareRenderer ? 0.60 : 1;
+let quality = softwareRenderer ? 0.60 : (handheld ? 0.70 : 1);
+let maxSteps = softwareRenderer ? 56 : (handheld ? 72 : MAX_STEPS);
+
+// A handheld at DPR 3 costs 2.25x a DPR 2 desktop for identical CSS pixels,
+// and the glyph grid discards that detail anyway.
+const dprCap = handheld ? 1.5 : DPR_CAP;
+const ceilSteps = maxSteps;
+const ceilQuality = quality;
 
 function resize(){
   const cssW = Math.max(1, canvas.clientWidth);
   const cssH = Math.max(1, canvas.clientHeight);
   const pixelCap = Math.sqrt(MAX_CANVAS_PIXELS / (cssW * cssH));
-  dpr = Math.max(0.5, Math.min(window.devicePixelRatio || 1, DPR_CAP, pixelCap) * quality);
+  dpr = Math.max(0.5, Math.min(window.devicePixelRatio || 1, dprCap, pixelCap) * quality);
   const w = Math.max(1, Math.round(cssW * dpr));
   const h = Math.max(1, Math.round(cssH * dpr));
   cellPx = Math.max(4, Math.round(CELL_CSS * dpr));
@@ -728,6 +761,7 @@ const S = {
   t0: performance.now(),
   frames: 0, fpsAt: performance.now(), fps: 0,
   slowRuns: 0,
+  fastRuns: 0,
   lastFrame: performance.now(),
 };
 
@@ -938,6 +972,7 @@ function draw(now){
     gl.uniform1f(uS.inflate, wi === 0 ? (reduced ? 1 : smooth(0.08, 0.94, S.boot)) : 1);
     gl.uniform1f(uS.split, splitProgress);
     gl.uniform1f(uS.zoom, cam.zoom);
+    gl.uniform1f(uS.maxSteps, maxSteps);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texRel);
     gl.activeTexture(gl.TEXTURE1);
@@ -975,28 +1010,45 @@ function draw(now){
     }
 
     S.frames++;
-    if (now - S.fpsAt > 650){
+    if (now - S.fpsAt > 350){
       S.fps = Math.round(S.frames * 1000 / (now - S.fpsAt));
       S.frames = 0;
       S.fpsAt = now;
       if (hud.fps) hud.fps.textContent = S.fps + " fps";
-      if (S.fps < 46 && ss === 2 && ++S.slowRuns >= 3){
-        ss = 1;
+
+      // Shed load in order of what it costs to look at: march distance first
+      // (far detail only), then supersampling, and resolution last — blurring
+      // the whole field is the most visible thing available, so it goes last.
+      if (S.fps < 50){
+        if (++S.slowRuns >= 2){
+          S.slowRuns = 0;
+          if (maxSteps > MIN_STEPS){
+            maxSteps = Math.max(MIN_STEPS, maxSteps - 16);
+          } else if (ss === 2){
+            ss = 1;
+            allocScene();
+          } else if (quality > MIN_QUALITY){
+            quality = Math.max(MIN_QUALITY, quality - 0.15);
+            resize();
+          }
+        }
+      } else {
         S.slowRuns = 0;
-        allocScene();
-      } else if (S.fps < 40 && ss === 1 && quality > 0.76 && ++S.slowRuns >= 3){
-        quality = 0.75;
-        S.slowRuns = 0;
-        resize();
-      } else if (S.fps < 32 && quality > 0.61 && ++S.slowRuns >= 3){
-        quality = 0.60;
-        S.slowRuns = 0;
-        resize();
-      } else if (S.fps >= 46) {
-        S.slowRuns = 0;
+        // Climb back once there is real headroom, so one hitch during a heavy
+        // station does not pin the page at its floor for the rest of the visit.
+        if (S.fps >= 58 && ++S.fastRuns >= 8){
+          S.fastRuns = 0;
+          if (maxSteps < ceilSteps){
+            maxSteps = Math.min(ceilSteps, maxSteps + 16);
+          } else if (quality < ceilQuality){
+            quality = Math.min(ceilQuality, quality + 0.15);
+            resize();
+          }
+        }
       }
       if (hud.grid) {
-        hud.grid.textContent = gridW + "×" + gridH + " · ss " + ss + "× · q " + quality;
+        hud.grid.textContent = gridW + "×" + gridH + " · ss " + ss +
+          "× · q " + quality.toFixed(2) + " · " + maxSteps + " steps";
       }
     }
 
@@ -1059,6 +1111,49 @@ canvas.addEventListener("webglcontextlost", event => {
 
 canvas.addEventListener("webglcontextrestored", () => location.reload());
 
+
+/* ------------------------------------------------- orientation hint -- */
+/* Shown only where turning the device is actually an option: a touch screen
+ * held upright. It is advice, not a gate — the page is fully usable in
+ * portrait, so this never covers the content or blocks scrolling, and it
+ * retires itself as soon as the phone turns. */
+(() => {
+  const hint = document.getElementById("rotate-hint");
+  if (!hint) return;
+  const dismiss = document.getElementById("rotate-dismiss");
+  const portrait = matchMedia("(orientation: portrait)");
+  const touch = matchMedia("(pointer: coarse)");
+
+  let retired = false;
+  try { retired = sessionStorage.getItem("ibvoid.rotate") === "off"; } catch {}
+
+  let timer = 0;
+  const hide = () => { hint.hidden = true; clearTimeout(timer); };
+  const retire = () => {
+    retired = true;
+    hide();
+    try { sessionStorage.setItem("ibvoid.rotate", "off"); } catch {}
+  };
+
+  function sync(){
+    if (retired || !touch.matches || !portrait.matches){ hide(); return; }
+    if (!hint.hidden) return;
+    hint.hidden = false;
+    // Say it once and get out of the way; a hint that never leaves is a nag.
+    clearTimeout(timer);
+    timer = setTimeout(hide, 7000);
+  }
+
+  dismiss?.addEventListener("click", retire);
+  // Turning the phone is the hint being taken, so stop offering it.
+  portrait.addEventListener?.("change", () => {
+    if (!portrait.matches) retire(); else sync();
+  });
+  touch.addEventListener?.("change", sync);
+  addEventListener("scroll", () => { if (!hint.hidden) hide(); },
+                   { passive: true, once: true });
+
+  sync();
 })();
 
-
+})();
