@@ -324,6 +324,10 @@ main {
   grid-row: 1;
   grid-column: 1 / -1;
   height: 100vh;
+  /* Mobile browsers resize the viewport as their chrome hides, which makes
+     100vh jump mid-scroll and re-triggers a canvas realloc. svh is the
+     stable small viewport; the vh above stays as the fallback. */
+  height: 100svh;
   pointer-events: none;
 }
 
@@ -1157,7 +1161,7 @@ details p {
   .project-grid { grid-column: 6 / -1; }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 720px), (max-height: 560px) {
   :root {
     --top: 60px;
     --gutter: 17px;
@@ -1171,139 +1175,106 @@ details p {
   .rail-tick { min-width: 21px; }
   .rail-tick[aria-current="true"]::after { width: 21px; }
 
+  /* The layered composition is a wide-viewport idea. It reads because
+     grid-column separates the layers horizontally while sticky offsets
+     stagger them vertically; drop the grid and only the sticky offsets are
+     left holding them apart, each one a hand-picked vh that assumed a
+     particular block height. Phone text wraps to more lines than any of those
+     numbers assumed, so the layers ride over each other. Put them back in
+     normal flow and let content height decide. */
   .station {
-    display: block;
-    padding-right: 38px;
-    padding-left: var(--gutter);
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    min-height: 0;
+    padding: calc(var(--top) + 34px) var(--gutter) 46vh;
+  }
+
+  .station > * {
+    position: relative;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    grid-column: auto;
+    grid-row: auto;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    transform: none;
   }
 
   .station::before { display: none; }
-  .station-arrival { min-height: 160vh; }
-  .station-measurement { min-height: 195vh; }
-  .station-split { min-height: 250vh; }
-  .station-upstream { min-height: 195vh; }
-  .station-works { min-height: 245vh; }
-  .station-proof { min-height: 150vh; }
 
+  /* Trailing space per station is what the 3D still gets to animate through,
+     now that the text no longer reserves it by being tall. */
+  .station-arrival  { padding-bottom: 58vh; }
+  .station-measurement { padding-bottom: 62vh; }
+  .station-split    { padding-bottom: 78vh; }
+  .station-upstream { padding-bottom: 52vh; }
+  .station-works    { padding-bottom: 52vh; }
+  .station-proof    { padding-bottom: 34vh; }
+
+  /* Text sits over a live scene, so it carries its own ground rather than
+     relying on the shader staying dark behind any particular paragraph. */
   .story {
-    width: 100%;
-    max-width: none;
-    padding: 24px 0;
-    background: linear-gradient(90deg, rgba(9, 10, 9, 0.92), rgba(9, 10, 9, 0.72) 78%, transparent);
+    padding: 20px 16px;
+    border-radius: 3px;
+    background: linear-gradient(180deg,
+      rgba(9, 10, 9, 0.93), rgba(9, 10, 9, 0.86));
+    text-shadow: none;
   }
 
-  .story-arrival { top: 42vh; }
-  .story-measurement,
-  .story-upstream,
-  .story-works { top: 16vh; }
-  .story-split { top: 46vh; }
-  .story-proof { top: 34vh; text-align: left; }
+  .story-proof { text-align: left; }
   .story-proof .eyebrow,
   .final-links { justify-content: flex-start; }
   .story-proof > p { margin-left: 0; }
-  .story-proof h2 { font-size: clamp(68px, 24vw, 118px); }
 
-  h1 { font-size: clamp(52px, 17vw, 82px); }
-  h2 { font-size: clamp(36px, 12vw, 58px); }
+  h1 { font-size: clamp(34px, 9.5vw, 46px); }
+  h2 { font-size: clamp(27px, 7.5vw, 38px); }
+  .story-proof h2 { font-size: clamp(40px, 13vw, 62px); }
+  .hero-lede { font-size: 16px; }
 
-  .engine-stamp {
-    position: absolute;
-    top: calc(var(--top) + 24px);
-    right: 38px;
-  }
+  .engine-stamp,
+  .lens-cue,
+  .scroll-cue { display: none; }
 
-  .lens-cue {
-    right: auto;
-    bottom: 70px;
-    left: 18px;
-  }
+  .distribution { width: 100%; }
+  .distribution figcaption { display: grid; gap: 4px; }
+  .distribution ol { grid-template-columns: 1fr; min-height: 0; }
+  .distribution li { min-height: 0; padding: 12px 13px; }
 
-  .scroll-cue { right: 38px; }
-
-  .distribution {
-    top: 64vh;
-    width: 100%;
-  }
-
-  .distribution figcaption {
-    display: grid;
-    gap: 4px;
-  }
-
-  .distribution ol {
-    grid-template-columns: repeat(3, 1fr);
-    min-height: 0;
-  }
-
-  .distribution li {
-    min-height: 74px;
-  }
-
+  /* 28vw type was 112px on a 400px screen — three lines of headline colliding
+     with everything beneath it. */
   .fault-title {
-    top: 11vh;
-    display: grid;
-    grid-template-columns: auto auto auto;
-    width: 100%;
-    font-size: clamp(78px, 28vw, 138px);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+    font-size: clamp(38px, 12vw, 60px);
   }
+  .fault-title small { padding-left: 0; }
 
-  .fault-title small { padding-left: 2px; }
+  .rune-proof { width: auto; }
+  .impact-strip { grid-template-columns: 1fr; }
+  .impact-strip div:nth-child(n + 2) { display: none; }
 
-  .rune-proof {
-    top: 69vh;
-    width: auto;
-  }
-
-  .impact-strip {
-    top: 82vh;
-    grid-template-columns: 1fr;
-  }
-
-  .impact-strip div:nth-child(n + 2) {
-    display: none;
-  }
-
-  .upstream-list,
-  .project-grid {
-    position: relative;
-    top: auto;
-    margin-top: 92vh;
-  }
-
-  .upstream-list a {
-    padding: 15px 0;
-  }
-
-  .project-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .project {
-    min-height: 0;
-  }
-
-  .project-index {
-    margin-bottom: 22px;
-  }
-
-  .final-mark {
-    top: 14vh;
-  }
+  .upstream-list a { padding: 15px 0; }
+  .project-grid { grid-template-columns: 1fr; }
+  .project { min-height: 0; }
+  .project-index { margin-bottom: 22px; }
 
   .site-footer {
-    right: 38px;
-    left: 17px;
+    position: relative;
+    right: auto;
+    left: auto;
     flex-direction: column;
+    gap: 10px;
+    padding: 0 var(--gutter) 40px;
   }
 
-  .controls {
-    right: 9px;
-    bottom: 9px;
-  }
-
-  .controls button {
-    padding: 8px;
-  }
+  .controls { right: 9px; bottom: 9px; }
+  .controls button { padding: 8px; }
 }
 
 @media (max-width: 380px) {
@@ -1338,3 +1309,123 @@ details p {
 
 
 
+
+/* Orientation hint. A suggestion, never a gate: the page works in portrait,
+   it is simply composed for a wide frame. It removes itself the moment the
+   phone turns, and once dismissed it stays gone for the session. */
+.rotate-hint {
+  position: fixed;
+  z-index: 60;
+  right: 14px;
+  bottom: 14px;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line, #28302f);
+  border-radius: 3px;
+  background: rgba(9, 10, 9, 0.93);
+  backdrop-filter: blur(10px);
+  color: var(--muted, #8fa3a3);
+  font: 500 10px/1.45 var(--mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  animation: rotate-in 420ms ease-out both;
+}
+
+.rotate-hint[hidden] { display: none; }
+.rotate-hint p { margin: 0; flex: 1; }
+.rotate-hint strong { color: var(--shine, #f8ecd8); font-weight: 600; }
+
+.rotate-hint button {
+  flex: none;
+  padding: 6px 10px;
+  border: 1px solid var(--line, #28302f);
+  border-radius: 2px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.rotate-hint button:hover,
+.rotate-hint button:focus-visible {
+  border-color: var(--aqua, #40a0a8);
+  color: var(--shine, #f8ecd8);
+  outline: none;
+}
+
+/* A phone turning, drawn rather than shipped as an asset. */
+.rotate-glyph {
+  flex: none;
+  width: 15px;
+  height: 24px;
+  border: 1.5px solid var(--aqua, #40a0a8);
+  border-radius: 3px;
+  transform-origin: 50% 50%;
+  animation: rotate-tip 2.6s cubic-bezier(.65,0,.35,1) infinite;
+}
+
+@keyframes rotate-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes rotate-tip {
+  0%, 22%   { transform: rotate(0deg); }
+  46%, 74%  { transform: rotate(-90deg); }
+  100%      { transform: rotate(0deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rotate-hint { animation: none; }
+  .rotate-glyph { animation: none; transform: rotate(-90deg); }
+}
+
+/* A phone on its side: ~844x390. Width is no longer the constraint, height is.
+   The flow layout above already applies (its trigger includes max-height), so
+   this only has to spend the horizontal room well and buy back vertical space
+   everywhere it can. */
+@media (max-height: 560px) and (min-width: 721px) {
+  :root { --top: 44px; }
+
+  body { font-size: 14px; }
+
+  .station {
+    gap: 20px;
+    padding-top: calc(var(--top) + 16px);
+  }
+
+  /* Hold the text to a readable measure instead of letting it run the full
+     844px, which leaves the world visible beside it rather than behind it. */
+  .story,
+  .distribution,
+  .rune-proof,
+  .upstream-list,
+  .project-grid {
+    max-width: 56ch;
+  }
+
+  .story { padding: 15px 17px; }
+
+  h1 { font-size: clamp(26px, 4.4vw, 36px); }
+  h2 { font-size: clamp(21px, 3.4vw, 28px); }
+  .story-proof h2 { font-size: clamp(34px, 6vw, 48px); }
+  .fault-title { font-size: clamp(30px, 5vw, 44px); }
+  .hero-lede { font-size: 15px; }
+
+  /* Scroll room is proportional to viewport height, and there is little of it,
+     so give each station a touch more than the portrait share. */
+  .station-arrival     { padding-bottom: 72vh; }
+  .station-measurement { padding-bottom: 76vh; }
+  .station-split       { padding-bottom: 96vh; }
+  .station-upstream    { padding-bottom: 66vh; }
+  .station-works       { padding-bottom: 66vh; }
+  .station-proof       { padding-bottom: 40vh; }
+
+  .topbar { padding-top: 8px; padding-bottom: 8px; }
+  .chapter-rail { right: 10px; }
+  .site-footer { padding-bottom: 26px; }
+  .controls button { padding: 6px 8px; }
+}
