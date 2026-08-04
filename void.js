@@ -1163,7 +1163,6 @@ function resetCupPointer(){
   if (!ritualCup) return;
   ritualCup.style.setProperty("--cup-yaw", "0deg");
   ritualCup.style.setProperty("--cup-pitch", "0deg");
-  ritualCup.style.setProperty("--steam-bias", "0px");
 }
 
 if (ritualCup){
@@ -1177,7 +1176,6 @@ if (ritualCup){
       ((event.clientY - rect.top) / Math.max(1, rect.height) - 0.5) * 2));
     ritualCup.style.setProperty("--cup-yaw", `${(x * 2.5).toFixed(2)}deg`);
     ritualCup.style.setProperty("--cup-pitch", `${(-y * 1.8).toFixed(2)}deg`);
-    ritualCup.style.setProperty("--steam-bias", `${(x * 4.5).toFixed(2)}px`);
   }, { passive: true });
   ritualCup.addEventListener("pointerleave", resetCupPointer, { passive: true });
   ritualCup.addEventListener("blur", resetCupPointer);

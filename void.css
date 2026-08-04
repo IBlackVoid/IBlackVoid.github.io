@@ -1190,10 +1190,10 @@ details p {
   position: absolute;
   inset: 50% auto auto 50%;
   display: grid;
-  grid-template-columns: minmax(170px, 230px) minmax(220px, 310px);
+  grid-template-columns: minmax(182px, 238px) minmax(210px, 286px);
   align-items: center;
-  gap: clamp(24px, 5vw, 70px);
-  width: min(78vw, 660px);
+  gap: clamp(44px, 5.4vw, 78px);
+  width: min(76vw, 680px);
   opacity: var(--after-tea);
   transform: translate(-50%, -47%) scale(calc(0.975 + var(--after-tea) * 0.025));
   transition: transform 700ms var(--ease-out);
@@ -1203,9 +1203,9 @@ details p {
   --cup-yaw: 0deg;
   --cup-pitch: 0deg;
   --cup-observe: 0;
-  --steam-bias: 0px;
   position: relative;
   display: grid;
+  aspect-ratio: 1.24;
   min-width: 0;
   padding: 0;
   border: 0;
@@ -1238,104 +1238,32 @@ details p {
   transform: scale(1);
 }
 
+.gl-ready .ritual-cup::before {
+  display: none;
+}
+
 .ritual-cup:focus-visible {
   outline: 1px solid rgba(183, 240, 232, 0.58);
   outline-offset: 8px;
 }
 
-.ritual-cup svg {
+.ritual-cup-ascii {
   display: block;
   width: 100%;
-  overflow: visible;
-  filter: brightness(calc(0.96 + var(--cup-observe) * 0.10));
-  transform: rotateX(var(--cup-pitch)) rotateY(var(--cup-yaw)) rotateZ(-1.1deg);
-  transform-origin: 48% 69%;
+  color: rgba(116, 216, 206, calc(0.58 + var(--cup-observe) * 0.18));
+  font: 700 clamp(6px, 0.72vw, 9px)/0.92 var(--mono);
+  letter-spacing: -0.045em;
+  text-align: left;
+  white-space: pre;
+  filter: drop-shadow(0 0 12px rgba(63, 177, 174, 0.16));
+  transform: rotateX(var(--cup-pitch)) rotateY(var(--cup-yaw));
+  transform-origin: 48% 62%;
   transform-style: preserve-3d;
-  transition: transform 420ms var(--ease-out), filter 360ms ease, opacity 260ms ease;
+  transition: color 360ms ease, transform 420ms var(--ease-out), opacity 260ms ease;
 }
 
-.gl-ready .ritual-cup svg {
-  opacity: 0.96;
-}
-
-.tea-shadow { fill: rgba(0, 0, 0, 0.46); }
-.tea-saucer { fill: url("#porcelain-edge"); opacity: 0.94; }
-.tea-saucer-well { fill: rgba(7, 68, 73, 0.78); }
-.tea-saucer-groove {
-  fill: none;
-  stroke: rgba(167, 245, 235, 0.34);
-  stroke-width: 3;
-}
-.tea-saucer-groove.is-inner {
-  stroke: rgba(3, 52, 60, 0.52);
-  stroke-width: 2;
-}
-.tea-handle,
-.tea-cup-body { fill: url("#porcelain"); }
-.tea-handle {
-  stroke: rgba(185, 246, 238, 0.24);
-  stroke-width: 2;
-}
-.tea-foot { fill: #0a5158; opacity: 0.90; }
-.tea-rim { fill: #b8f3eb; }
-.tea-rim-well { fill: #0b4b52; }
-.tea-liquid { fill: url("#tea"); }
-.tea-liquid-glint {
-  fill: none;
-  stroke: rgba(255, 232, 189, 0.60);
-  stroke-width: 3;
-  stroke-linecap: round;
-}
-.tea-glint {
-  fill: none;
-  stroke: rgba(224, 255, 250, 0.55);
-  stroke-width: 7;
-  stroke-linecap: round;
-}
-.tea-band {
-  fill: none;
-  stroke: rgba(3, 67, 75, 0.31);
-  stroke-width: 3;
-}
-.tea-band.is-lower { stroke-width: 2; }
-.tea-repair {
-  fill: none;
-  stroke: rgba(2, 43, 49, 0.46);
-  stroke-width: 2.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.tea-thread {
-  fill: none;
-  stroke: rgba(232, 216, 183, 0.58);
-  stroke-width: 1.6;
-}
-.tea-tag {
-  fill: #d7c9aa;
-  stroke: rgba(73, 48, 33, 0.62);
-  stroke-width: 1.3;
-}
-
-.tea-steam path {
-  fill: none;
-  stroke: rgba(221, 247, 241, 0.46);
-  stroke-width: 4;
-  stroke-linecap: round;
-  stroke-dasharray: 10 13;
-  transform: translateX(var(--steam-bias));
-  animation: tea-steam 4.8s linear infinite;
-  transition: transform 420ms var(--ease-out);
-}
-
-.tea-steam path:nth-child(2) {
-  animation-duration: 6.3s;
-  animation-delay: -2.1s;
-}
-
-@keyframes tea-steam {
-  0% { stroke-dashoffset: 0; opacity: 0.18; }
-  45% { opacity: 0.72; }
-  100% { stroke-dashoffset: -46; opacity: 0.08; }
+.gl-ready .ritual-cup-ascii {
+  opacity: 0;
 }
 
 .ritual-cup-label {
@@ -1356,31 +1284,40 @@ details p {
   transform: translateY(0);
 }
 
+.gl-ready .ritual-cup-label {
+  visibility: hidden;
+  opacity: 0;
+}
+
 .ritual-copy {
   align-self: center;
-  padding-left: clamp(18px, 3vw, 44px);
+  min-width: 0;
+  max-width: 286px;
+  padding-left: clamp(24px, 2.5vw, 36px);
   border-left: 1px solid rgba(183, 240, 232, 0.18);
 }
 
 .ritual-eyebrow {
-  margin: 0 0 17px;
-  color: rgba(183, 240, 232, 0.50);
+  margin: 0 0 13px;
+  color: rgba(183, 240, 232, 0.46);
   font: 500 8px/1 var(--mono);
-  letter-spacing: 0.24em;
+  letter-spacing: 0.20em;
   text-transform: uppercase;
 }
 
 #ritual-clue {
-  margin: 0 0 26px;
-  color: rgba(241, 238, 231, 0.78);
-  font: 430 clamp(17px, 1.8vw, 22px)/1.35 var(--sans);
-  letter-spacing: -0.02em;
+  max-width: 24ch;
+  margin: 0 0 20px;
+  color: rgba(241, 238, 231, 0.76);
+  font: 520 clamp(14px, 1.25vw, 17px)/1.45 var(--mono);
+  letter-spacing: 0.025em;
+  text-wrap: balance;
 }
 
 .ritual-slots {
   display: grid;
-  grid-template-columns: repeat(4, 34px);
-  gap: 10px;
+  grid-template-columns: repeat(4, 28px);
+  gap: 8px;
   width: max-content;
   margin: 0;
   padding: 0;
@@ -1389,25 +1326,28 @@ details p {
 
 .ritual-slots li {
   position: relative;
-  height: 34px;
-  border-bottom: 1px solid rgba(183, 240, 232, 0.28);
+  height: 28px;
+  border-bottom: 1px solid rgba(183, 240, 232, 0.36);
 }
 
 .ritual-slots li::before {
   content: "";
   position: absolute;
-  inset: 7px 9px;
+  bottom: 7px;
+  left: 50%;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--aqua-soft);
-  box-shadow: 0 0 18px rgba(116, 216, 206, 0.54);
+  box-shadow: 0 0 12px rgba(116, 216, 206, 0.48);
   opacity: 0;
-  transform: scale(0.45);
+  transform: translateX(-50%) scale(0.45);
   transition: opacity 180ms ease, transform 320ms var(--ease-out);
 }
 
 .ritual-slots li.is-filled::before {
   opacity: 0.82;
-  transform: scale(1);
+  transform: translateX(-50%) scale(1);
 }
 
 .ritual-slots li.is-error {
@@ -1422,8 +1362,8 @@ details p {
 }
 
 .ritual-hint {
-  margin: 18px 0 0;
-  color: rgba(173, 184, 179, 0.40);
+  margin: 13px 0 0;
+  color: rgba(173, 184, 179, 0.52);
   font: 500 8px/1.4 var(--mono);
   letter-spacing: 0.13em;
   text-transform: uppercase;
@@ -1437,6 +1377,7 @@ details p {
   width: min(92vw, 1120px);
   margin: 0;
   opacity: var(--after-name);
+  pointer-events: none;
   text-align: center;
   transform: translate(-50%, -46%) scale(calc(0.985 + var(--after-name) * 0.015));
 }
@@ -1479,6 +1420,7 @@ details p {
   margin: 0;
   overflow: hidden;
   opacity: var(--after-wall);
+  pointer-events: none;
   background:
     linear-gradient(91deg, transparent 0 73%, rgba(55, 46, 38, 0.055) 73.25%, transparent 73.8%),
     radial-gradient(ellipse at 29% 18%, rgba(242, 236, 224, 0.24), transparent 45%),
@@ -1637,6 +1579,11 @@ html:not([data-ritual="sealed"]) .topbar:not(:focus-within),
 html:not([data-ritual="sealed"]) .chapter-rail:not(:focus-within),
 html:not([data-ritual="sealed"]) .controls:not(:focus-within) {
   opacity: 0.22;
+}
+
+html:not([data-ritual="sealed"]) .chapter-rail {
+  visibility: hidden;
+  opacity: 0;
 }
 
 html[data-ritual="unlocked"] .topbar:not(:focus-within),
@@ -1869,19 +1816,19 @@ html:not([data-ritual="sealed"]) .topbar:not(:focus-within) {
 
   .ritual-cup {
     position: absolute;
-    top: 35%;
-    left: 50%;
-    width: min(30vw, 132px);
+    top: 46%;
+    left: 45%;
+    width: min(58vw, 220px);
     transform: translate(-50%, -50%);
     pointer-events: auto;
   }
 
   .ritual-copy {
     position: absolute;
-    bottom: max(96px, calc(env(safe-area-inset-bottom) + 82px));
+    bottom: max(84px, calc(env(safe-area-inset-bottom) + 74px));
     left: 50%;
-    width: min(calc(100vw - 42px), 360px);
-    padding: 22px 18px 18px;
+    width: min(calc(100vw - 52px), 326px);
+    padding: 18px 16px 14px;
     border-top: 0;
     border-left: 0;
     background:
@@ -1915,15 +1862,18 @@ html:not([data-ritual="sealed"]) .topbar:not(:focus-within) {
     background: linear-gradient(rgba(183, 240, 232, 0.42), transparent);
   }
 
-  .ritual-eyebrow { margin-bottom: 12px; }
-  #ritual-clue { margin-bottom: 15px; }
+  .ritual-eyebrow { margin-bottom: 10px; }
+  #ritual-clue {
+    margin-bottom: 16px;
+    font-size: clamp(13px, 3.7vw, 15px);
+  }
   .ritual-slots {
-    grid-template-columns: repeat(4, 30px);
-    gap: 9px;
+    grid-template-columns: repeat(4, 26px);
+    gap: 7px;
     margin: 0;
   }
-  .ritual-slots li { height: 30px; }
-  .ritual-hint { margin-top: 13px; }
+  .ritual-slots li { height: 25px; }
+  .ritual-hint { margin-top: 11px; }
   .desktop-hint { display: none; }
   .touch-hint { display: inline; }
   .ritual-hint { color: rgba(173, 184, 179, 0.72); }
@@ -1950,6 +1900,23 @@ html:not([data-ritual="sealed"]) .topbar:not(:focus-within) {
   .ritual-cup-label {
     opacity: 0.62;
     transform: translateY(0);
+  }
+}
+
+@media (max-width: 720px) {
+  .gl-ready .ritual-cup {
+    top: 26vh;
+    left: 4vw;
+    width: 64vw;
+    height: 36vh;
+    transform: none;
+  }
+
+  .gl-ready .ritual-cup-ascii {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
   }
 }
 
@@ -1992,7 +1959,6 @@ html:not([data-ritual="sealed"]) .topbar:not(:focus-within) {
     filter: none;
   }
 
-  .tea-steam path { animation: none !important; }
 }
 
 .no-motion .cue-ring,
@@ -2014,9 +1980,6 @@ html:not([data-ritual="sealed"]) .topbar:not(:focus-within) {
 .no-motion .afterimage-signature svg {
   filter: none;
 }
-
-.no-motion .tea-steam path { animation: none; }
-
 
 /* Orientation hint. A suggestion, never a gate: the page works in portrait,
    it is simply composed for a wide frame. It removes itself the moment the
@@ -2151,12 +2114,4 @@ html:not([data-ritual="sealed"]) .topbar:not(:focus-within) {
     transform: translateY(-50%);
   }
 
-  /* The public chapter readout sits in the same right-edge lane as the
-     landscape catcher. Once the hidden room opens it no longer describes the
-     current scene, so retire it instead of letting "05" cut through the
-     panel's illuminated edge. */
-  html:not([data-ritual="sealed"]) .chapter-rail {
-    visibility: hidden;
-    opacity: 0;
-  }
 }
