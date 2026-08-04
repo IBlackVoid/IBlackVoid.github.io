@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-after="sealed">
+<html lang="en" data-after="sealed" data-ritual="sealed">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -260,42 +260,88 @@
       </footer>
     </section>
 
-    <section class="afterimage" id="afterimage" aria-labelledby="afterimage-name">
+    <section class="afterimage" id="afterimage" aria-labelledby="ritual-heading"
+             aria-hidden="true" tabindex="-1" inert>
       <div class="afterimage-scene">
-        <div class="afterimage-fracture" aria-hidden="true">
-          <i></i><i></i><i></i>
+        <h2 class="sr-only" id="ritual-heading">A hidden observation</h2>
+
+        <div class="ritual-room">
+          <button class="ritual-cup" id="ritual-cup" type="button" tabindex="-1"
+                  aria-describedby="ritual-clue">
+            <svg viewBox="0 0 420 340" role="img"
+                 aria-labelledby="tea-title tea-desc">
+              <title id="tea-title">A turquoise cup of tea</title>
+              <desc id="tea-desc">A porcelain cup, amber tea, and a saucer waiting in a quiet room.</desc>
+              <defs>
+                <linearGradient id="porcelain" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#c1e2dc" />
+                  <stop offset="0.42" stop-color="#549c99" />
+                  <stop offset="1" stop-color="#285f63" />
+                </linearGradient>
+                <radialGradient id="tea" cx="45%" cy="35%" r="70%">
+                  <stop offset="0" stop-color="#f5d49b" />
+                  <stop offset="0.5" stop-color="#b66b2e" />
+                  <stop offset="1" stop-color="#4d2318" />
+                </radialGradient>
+              </defs>
+              <ellipse class="tea-shadow" cx="206" cy="289" rx="137" ry="21" />
+              <ellipse class="tea-saucer" cx="206" cy="267" rx="145" ry="29" />
+              <ellipse class="tea-saucer-rim" cx="206" cy="261" rx="123" ry="17" />
+              <path class="tea-handle" d="M301 151 C364 137 371 224 311 226 C291 227 284 207 299 198 C324 210 342 191 338 170 C334 151 316 158 301 166Z" />
+              <path class="tea-cup-body" d="M101 131 L309 131 L294 238 C290 266 122 266 116 238Z" />
+              <ellipse class="tea-rim" cx="205" cy="133" rx="105" ry="24" />
+              <ellipse class="tea-liquid" cx="205" cy="134" rx="92" ry="16" />
+              <path class="tea-glint" d="M127 166 C131 207 142 229 166 240" />
+              <g class="tea-steam" aria-hidden="true">
+                <path d="M153 98 C129 63 177 57 153 18" />
+                <path d="M207 96 C183 65 233 53 209 9" />
+                <path d="M260 99 C238 66 281 57 264 27" />
+              </g>
+            </svg>
+            <span class="ritual-cup-label">inspect the tell</span>
+          </button>
+
+          <div class="ritual-copy">
+            <p class="ritual-eyebrow">unindexed / observation</p>
+            <p id="ritual-clue">some habits are tells.</p>
+            <ol class="ritual-slots" aria-label="Four-letter observation">
+              <li><span></span></li><li><span></span></li>
+              <li><span></span></li><li><span></span></li>
+            </ol>
+            <p class="ritual-hint"><span class="desktop-hint">type what you notice</span><span class="touch-hint">touch the cup</span></p>
+          </div>
         </div>
 
-        <header class="afterimage-name">
-          <span>unindexed / afterimage</span>
-          <h2 id="afterimage-name">JANE</h2>
+        <header class="afterimage-name" aria-hidden="true">
+          <span>observation / accepted</span>
+          <p class="afterimage-word" id="afterimage-word"></p>
+          <p>you noticed.</p>
         </header>
 
-        <figure class="afterimage-signature">
-          <svg viewBox="0 0 640 420" role="img"
-               aria-labelledby="afterimage-signature-title afterimage-signature-desc">
-            <title id="afterimage-signature-title">A rough crimson smile</title>
-            <desc id="afterimage-signature-desc">A hidden reference to The Mentalist, drawn as two uneven eyes, a wide smile, and sparse drips.</desc>
-            <g class="signature-shadow" aria-hidden="true">
-              <path pathLength="1" d="M193 94 C177 125 180 174 197 213" />
-              <path pathLength="1" d="M433 88 C449 124 447 169 426 205" />
-              <path pathLength="1" d="M106 248 C218 366 425 378 548 232" />
-            </g>
-            <g class="signature-ink" aria-hidden="true">
-              <path class="signature-eye-left" pathLength="1" d="M189 91 C173 126 179 175 197 215" />
-              <path class="signature-eye-right" pathLength="1" d="M436 86 C451 124 446 171 425 207" />
-              <path class="signature-smile" pathLength="1" d="M104 246 C216 369 428 380 552 228" />
-              <path class="signature-drip signature-drip-a" pathLength="1" d="M197 214 C194 239 202 250 196 272" />
-              <path class="signature-drip signature-drip-b" pathLength="1" d="M426 205 C431 227 423 239 428 259" />
-              <path class="signature-drip signature-drip-c" pathLength="1" d="M492 283 C497 302 491 313 494 329" />
-            </g>
-          </svg>
-        </figure>
+        <figure class="afterimage-signature" id="afterimage-signature"
+                aria-hidden="true"></figure>
 
-        <a class="afterimage-return" href="#proof">return to proof <span aria-hidden="true">&uarr;</span></a>
+        <a class="afterimage-return" href="#proof" tabindex="-1" aria-hidden="true">return to proof <span aria-hidden="true">&uarr;</span></a>
+        <output class="sr-only" id="ritual-status" aria-live="polite"></output>
       </div>
     </section>
   </main>
+
+  <dialog class="ritual-dialog" id="ritual-dialog" aria-labelledby="ritual-dialog-title">
+    <form class="ritual-dialog-card" id="ritual-form" method="dialog">
+      <p class="ritual-eyebrow">observation / four letters</p>
+      <h2 id="ritual-dialog-title">Name the tell.</h2>
+      <label for="ritual-answer">Your observation</label>
+      <input id="ritual-answer" name="observation" type="text" maxlength="4"
+             autocomplete="off" autocapitalize="characters" spellcheck="false"
+             inputmode="text" enterkeyhint="done">
+      <p class="ritual-dialog-status" id="ritual-dialog-status" role="status"></p>
+      <div class="ritual-dialog-actions">
+        <button id="ritual-cancel" type="button">leave it</button>
+        <button type="submit">observe</button>
+      </div>
+    </form>
+  </dialog>
 
   <div class="rotate-hint" id="rotate-hint" hidden>
     <span class="rotate-glyph" aria-hidden="true"></span>

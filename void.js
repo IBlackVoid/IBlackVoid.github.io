@@ -33,7 +33,7 @@ const WORLDS = [
   { min: [-48, 0, -30], max: [ 48, 14,  30] },  // 2 split
   { min: [-52, 0, -18], max: [ 52, 32,  18] },  // 3 commit topology
   { min: [-46, 0, -14], max: [ 46, 28,  14] },  // 4 project machines
-  { min: [-64, 0,   0], max: [ 64, 38,  10] },  // 5 mark
+  { min: [-64, 0, -24], max: [ 64, 38,  24] },  // 5 proof / tea / mark
 ];
 
 /* ---------------------------------------------------------------- shaders -- */
@@ -57,7 +57,7 @@ precision highp float;
 uniform vec2      uRes, uShift;
 uniform vec3      uCamPos, uCamTgt, uUMin, uUMax;
 uniform float     uTime, uWorldA, uWorldB, uMorph, uPhase, uCut, uFocus,
-                  uInflate, uSplit, uZoom, uMaxSteps, uAfter;
+                  uInflate, uSplit, uZoom, uMaxSteps, uAfter, uRitual;
 uniform sampler2D uRelief, uMark;
 
 const vec3 VOIDC = vec3(0.047, 0.047, 0.047);
@@ -67,6 +67,8 @@ const vec3 SHINE = vec3(0.973, 0.925, 0.847);
 const vec3 GREEN = vec3(0.314, 0.784, 0.439);
 const vec3 STEEL = vec3(0.470, 0.600, 0.640);
 const vec3 BLOOD = vec3(0.930, 0.035, 0.090);
+const vec3 TEAL  = vec3(0.250, 0.590, 0.575);
+const vec3 TEA   = vec3(0.720, 0.360, 0.120);
 
 float h11(float p){ return fract(sin(p * 127.1) * 43758.5453123); }
 float h21(vec2  p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
@@ -83,7 +85,7 @@ void wbounds(float w, out vec3 lo, out vec3 hi){
   else if (w < 2.5){ lo = vec3(-48.0, 0.0,-30.0); hi = vec3( 48.0, 14.0, 30.0); }
   else if (w < 3.5){ lo = vec3(-52.0, 0.0,-18.0); hi = vec3( 52.0, 32.0, 18.0); }
   else if (w < 4.5){ lo = vec3(-46.0, 0.0,-14.0); hi = vec3( 46.0, 28.0, 14.0); }
-  else             { lo = vec3(-64.0, 0.0,  0.0); hi = vec3( 64.0, 38.0, 10.0); }
+  else             { lo = vec3(-64.0, 0.0,-24.0); hi = vec3( 64.0, 38.0, 24.0); }
 }
 
 /* Exact inverse CDF for the six measured self-compile buckets:
@@ -229,23 +231,58 @@ float worldAt(float w, vec3 c){
     }
 
   } else {
-    // 05 — the mark, standing on the same ground and coming apart.
+    // 05 — public proof, a discovered tea ritual, and the final signature.
+    float ritual = smoothstep(0.02, 0.98, uRitual);
+    float cupLife = ritual * (1.0 - smoothstep(0.08, 0.30, uAfter));
+
+    if (h31(c * 1.31 + 19.0) < cupLife){
+      // The clue belongs inside the field rather than sitting over it as a
+      // large illustration. Keep it low-left and human-scale in world space.
+      vec3 q = (c - vec3(-13.0, 0.0, 0.0)) / 0.72;
+      float r = length(q.xz);
+
+      // A shallow turquoise saucer, tapered porcelain shell, amber surface,
+      // and a vertical handle. Separate material ids let the tea darken before
+      // the cup yields to the final wall.
+      float saucer = length(vec2(q.x / 21.0, q.z / 14.0));
+      if (c.y >= 2.0 && c.y < 4.0 && saucer < 1.0) m = 16.0;
+
+      float bodyR = 9.5 + (c.y - 5.0) * 0.22;
+      if (c.y >= 5.0 && c.y < 17.0 && abs(r - bodyR) < 1.35) m = 16.0;
+      if (c.y >= 4.0 && c.y < 6.0 && r < 10.2) m = 16.0;
+      if (c.y >= 17.0 && c.y < 19.0 && abs(r - 12.3) < 1.45) m = 16.0;
+      if (c.y >= 17.0 && c.y < 18.0 && r < 10.9) m = 17.0;
+
+      float handle = length(vec2(q.x - 15.0, q.y - 11.0));
+      if (q.x > 9.0 && abs(q.z) < 2.0 && abs(handle - 6.4) < 1.35) m = 16.0;
+
+      if (c.y >= 20.0 && c.y < 35.0){
+        float sway = sin(c.y * 0.43 + uTime * 0.34);
+        float d0 = length(vec2(q.x + 5.2 - sway * 1.1,
+                               q.z - sin(c.y * 0.31) * 0.8));
+        float d1 = length(vec2(q.x - sin(c.y * 0.37 + 1.7) * 1.2,
+                               q.z + 0.8 - cos(c.y * 0.29) * 0.8));
+        float d2 = length(vec2(q.x - 5.2 - sway * 0.9,
+                               q.z - sin(c.y * 0.34 + 2.4) * 0.7));
+        if (min(d0, min(d1, d2)) < 0.92 && mod(c.y, 3.0) < 2.0) m = 18.0;
+      }
+    }
+
     vec2 uv = vec2((c.x - lo.x) / (hi.x - lo.x), 1.0 - (c.y - 2.0) / 34.0);
-    if (uv.y > 0.0 && uv.y < 1.0 && c.z < 8.0){
+    if (uv.y > 0.0 && uv.y < 1.0 && abs(c.z) < 1.5){
       vec4 mark = texture2D(uMark, uv);
+      float proofKeep = h31(c * 0.41 + 7.0);
+      if (mark.r > 0.5 && proofKeep > ritual) m = 8.0;
 
-      // Coordinate fronts rewrite the mark without random per-cell work.
-      float erase = smoothstep(0.12, 0.36, uAfter);
-      float write = smoothstep(0.14, 0.40, uAfter);
-      float sign  = smoothstep(0.62, 0.94, uAfter);
-      float baseFront = uv.y + uv.x * 0.08;
+      float write = smoothstep(0.28, 0.42, uAfter);
+      float nameErase = smoothstep(0.46, 0.58, uAfter);
+      float sign  = smoothstep(0.70, 0.96, uAfter);
       float nameFront = uv.x + uv.y * 0.06;
-
-      if (mark.r > 0.5 && baseFront > erase * 1.08) m = 8.0;
       if (mark.g > 0.5 && nameFront < write * 1.08 &&
-          uv.y + uv.x * 0.04 > sign * 1.04) m = 8.0;
+          uv.y + uv.x * 0.04 > nameErase * 1.04) m = 8.0;
 
-      // Blue intensity stores stroke order: eyes, smile, then sparse drips.
+      // Blue intensity is the construction order: enclosing circle, short
+      // eyes, the restrained smile, then descending paint.
       float strokeGate = mix(1.01, 0.46, sign);
       if (mark.b > strokeGate) m = 15.0;
     }
@@ -297,7 +334,11 @@ vec3 matColor(float m, vec3 c){
   if (m < 12.5) return vec3(0.68, 0.56, 0.86) * ((abs(uFocus - 3.0) < 0.5) ? 2.10 : 1.04);
   if (m < 13.5) return STEEL * 0.25;
   if (m < 14.5) return STEEL * 0.76;
-  return BLOOD * 1.42;
+  if (m < 15.5) return BLOOD * 1.42;
+  if (m < 16.5) return TEAL * (1.18 + 0.22 * h31(c * 0.47));
+  if (m < 17.5) return mix(TEA * 1.32, BLOOD * 0.92,
+                           smoothstep(0.10, 0.34, uAfter));
+  return SHINE * (0.58 + 0.22 * h31(c * 0.31));
 }
 
 void main(){
@@ -461,81 +502,474 @@ const root   = document.documentElement;
 const canvas = document.getElementById("void");
 const still  = matchMedia("(prefers-reduced-motion: reduce)");
 
-/* --------------------------------------------------------- the afterimage -- */
+/* ------------------------------------------------------- observation gate -- */
 
-/* The easter egg uses ordinary document travel instead of synthetic overscroll.
- * That keeps wheel, touch, keyboard, reversal, and assistive navigation native.
- * It is deliberately not a station: the public story still ends at proof. */
+/* The public document ends before this section. A new gesture must continue
+ * downward after the browser has already reached that end; arriving there by
+ * inertia is not enough. Arming only expands ordinary document flow. We never
+ * cancel wheel, touch, or keyboard defaults, so the ritual cannot become a
+ * scroll trap. This is a discovery gate, not access control: public JavaScript
+ * can always be inspected. The private deployment is the actual privacy layer. */
 const afterElement = document.getElementById("afterimage");
+const ritualRoom = document.querySelector(".ritual-room");
+const ritualCup = document.getElementById("ritual-cup");
+const ritualStatus = document.getElementById("ritual-status");
+const ritualSlots = Array.from(document.querySelectorAll(".ritual-slots li"));
+const ritualDialog = document.getElementById("ritual-dialog");
+const ritualForm = document.getElementById("ritual-form");
+const ritualAnswer = document.getElementById("ritual-answer");
+const ritualDialogStatus = document.getElementById("ritual-dialog-status");
+const ritualCancel = document.getElementById("ritual-cancel");
+const afterName = document.querySelector(".afterimage-name");
+const afterWord = document.getElementById("afterimage-word");
+const afterSignature = document.getElementById("afterimage-signature");
+const afterReturn = document.querySelector(".afterimage-return");
+const ANSWER = [0x4a, 0x41, 0x4e, 0x45];
+
 const afterState = {
   raw: 0,
   target: 0,
   start: 0,
   end: 1,
+  revealStart: 0,
+  unlocked: false,
   onchange: null,
 };
+
+const ritualState = {
+  phase: "sealed",
+  typed: [],
+  typedTimer: 0,
+  wheelPressure: 0,
+  wheelSamples: 0,
+  wheelStarted: 0,
+  wheelActive: false,
+  lastWheel: 0,
+  keyPressure: 0,
+  keyDeadline: 0,
+  touchReady: false,
+  touchStartY: 0,
+  touchPressure: 0,
+};
+
+let ritualTarget = 0;
 
 const range = (a, b, x) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 };
 
+function isInteractiveEvent(event){
+  const path = typeof event.composedPath === "function"
+    ? event.composedPath()
+    : [event.target];
+  return path.some(node => node instanceof Element && node.matches(
+    "a,button,input,textarea,select,summary,[role='textbox']," +
+    "[contenteditable]:not([contenteditable='false'])"
+  ));
+}
+
+function isAtDocumentEnd(){
+  const scroller = document.scrollingElement || document.documentElement;
+  const remaining = scroller.scrollHeight - window.innerHeight - window.scrollY;
+  return remaining <= Math.max(3, window.innerHeight * 0.003);
+}
+
+function announce(message){
+  if (!ritualStatus) return;
+  ritualStatus.textContent = "";
+  requestAnimationFrame(() => { ritualStatus.textContent = message; });
+}
+
+function resetPressure(){
+  ritualState.wheelPressure = 0;
+  ritualState.wheelSamples = 0;
+  ritualState.wheelStarted = 0;
+  ritualState.wheelActive = false;
+  ritualState.keyPressure = 0;
+  ritualState.keyDeadline = 0;
+  ritualState.touchReady = false;
+  ritualState.touchPressure = 0;
+}
+
+function updateSlots(length, error = false){
+  ritualSlots.forEach((slot, index) => {
+    slot.classList.toggle("is-filled", index < length);
+    slot.classList.toggle("is-error", error);
+  });
+  if (error) setTimeout(() => {
+    ritualSlots.forEach(slot => slot.classList.remove("is-error"));
+  }, 320);
+}
+
+function clearTyped(){
+  ritualState.typed.length = 0;
+  if (ritualState.typedTimer) clearTimeout(ritualState.typedTimer);
+  ritualState.typedTimer = 0;
+  updateSlots(0);
+}
+
+function setRitualPhase(phase){
+  ritualState.phase = phase;
+  root.dataset.ritual = phase;
+  ritualTarget = phase === "sealed" ? 0 : 1;
+  if (afterState.onchange) afterState.onchange();
+}
+
+function armRitual(){
+  if (!afterElement || ritualState.phase !== "sealed") return;
+  setRitualPhase("armed");
+  afterElement.inert = false;
+  afterElement.removeAttribute("inert");
+  afterElement.setAttribute("aria-hidden", "false");
+  if (ritualRoom) ritualRoom.setAttribute("aria-hidden", "false");
+  if (afterName) afterName.setAttribute("aria-hidden", "true");
+  if (afterSignature) afterSignature.setAttribute("aria-hidden", "true");
+  if (afterReturn) afterReturn.setAttribute("aria-hidden", "true");
+  if (ritualCup) ritualCup.tabIndex = 0;
+  resetPressure();
+  announce("A quiet room opened below.");
+  requestAnimationFrame(() => {
+    measureAfter();
+    readAfter();
+  });
+}
+
+function buildSignature(){
+  if (!afterSignature || afterSignature.firstElementChild) return;
+  const NS = "http://www.w3.org/2000/svg";
+  const make = (name, attrs = {}) => {
+    const node = document.createElementNS(NS, name);
+    for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+    return node;
+  };
+  const svg = make("svg", {
+    viewBox: "0 0 640 450",
+    role: "img",
+    "aria-labelledby": "signature-title signature-desc",
+  });
+  const title = make("title", { id: "signature-title" });
+  title.textContent = "A rough crimson face on an old wall";
+  const desc = make("desc", { id: "signature-desc" });
+  desc.textContent = "An uneven enclosing ring, two short asymmetrical eyes, a small curved smile, and irregular descending paint drips.";
+  svg.append(title, desc);
+
+  const defs = make("defs");
+  const filter = make("filter", { id: "ink-waver", x: "-8%", y: "-8%", width: "116%", height: "116%" });
+  filter.append(
+    make("feTurbulence", { type: "fractalNoise", baseFrequency: "0.011 0.034", numOctaves: "2", seed: "11", result: "noise" }),
+    make("feDisplacementMap", { in: "SourceGraphic", in2: "noise", scale: "6.2", xChannelSelector: "R", yChannelSelector: "G" })
+  );
+  defs.append(filter);
+  svg.append(defs);
+
+  const addPath = (parent, className, d) => parent.append(make("path", {
+    class: className,
+    pathLength: "1",
+    d,
+  }));
+
+  const shadow = make("g", { class: "signature-shadow", "aria-hidden": "true" });
+  addPath(shadow, "signature-circle", "M270 78 C360 50 449 90 484 168 C522 252 484 337 403 375 C320 414 224 378 177 304 C130 229 159 139 239 91 C247 86 254 82 258 81");
+  svg.append(shadow);
+
+  const ink = make("g", { class: "signature-ink", filter: "url(#ink-waver)", "aria-hidden": "true" });
+  const circle = make("g", { class: "signature-circle" });
+  addPath(circle, "", "M270 78 C360 50 449 90 484 168 C522 252 484 337 403 375 C320 414 224 378 177 304 C130 229 159 139 239 91 C247 86 254 82 258 81");
+  addPath(circle, "", "M284 83 C367 61 441 99 474 171 C503 234 490 292 456 329 M395 362 C323 398 235 366 190 299 C147 232 172 151 244 103 C254 96 266 90 271 88");
+  addPath(circle, "", "M298 89 C373 73 432 108 463 175 C494 244 462 314 394 348 C330 380 254 358 210 306");
+  ink.append(circle);
+  addPath(ink, "signature-eye-left", "M256 185 C273 167 299 163 313 174 C299 171 286 175 276 183 C274 202 280 224 275 248");
+  addPath(ink, "signature-eye-right", "M377 183 C399 186 421 197 436 213 C421 203 407 198 397 199 C402 220 397 245 401 272");
+  addPath(ink, "signature-smile", "M292 282 C321 303 365 307 399 286");
+  addPath(ink, "signature-smile signature-smile-faint", "M297 286 C326 305 360 307 389 290");
+  addPath(ink, "signature-smile signature-smile-fray", "M292 278 C311 289 327 294 343 295");
+  addPath(ink, "signature-drip is-heavy", "M453 113 C458 139 452 159 456 182");
+  addPath(ink, "signature-drip is-thin", "M473 149 C480 181 474 207 478 232");
+  addPath(ink, "signature-drip is-thin", "M183 289 C179 316 186 336 181 355");
+  addPath(ink, "signature-drip", "M235 368 C232 391 238 411 234 431");
+  addPath(ink, "signature-drip is-heavy", "M358 395 C363 417 357 434 360 449");
+  addPath(ink, "signature-drip is-thin", "M474 319 C481 346 474 369 479 390");
+  svg.append(ink);
+  afterSignature.append(svg);
+}
+
+function unlockRitual(){
+  if (!afterElement || ritualState.phase !== "armed") return;
+  clearTyped();
+  buildSignature();
+  setRitualPhase("unlocked");
+  afterState.unlocked = true;
+  afterState.revealStart = window.scrollY;
+  root.dataset.after = "tea";
+  if (afterWord) afterWord.textContent = String.fromCharCode(...ANSWER);
+
+  // A closed modal restores focus to the control that opened it. Move focus
+  // to the newly revealed section before hiding that control's room, or the
+  // browser can leave the active element inside an aria-hidden subtree.
+  afterElement.focus({ preventScroll: true });
+  if (ritualRoom) ritualRoom.setAttribute("aria-hidden", "true");
+  if (ritualCup) ritualCup.tabIndex = -1;
+  if (afterName) afterName.setAttribute("aria-hidden", "false");
+  if (afterSignature) afterSignature.setAttribute("aria-hidden", "true");
+  announce(`Observation accepted. ${String.fromCharCode(...ANSWER)}. Keep going.`);
+  requestAnimationFrame(() => {
+    measureAfter();
+    commitAfter(0);
+  });
+}
+
+function sealRitual(moveToEnd = true){
+  if (!afterElement || ritualState.phase === "sealed") return;
+  clearTyped();
+  afterState.unlocked = false;
+  afterState.revealStart = 0;
+  commitAfter(0);
+  setRitualPhase("sealed");
+  const active = document.activeElement;
+  if (active instanceof HTMLElement && afterElement.contains(active)) active.blur();
+  afterElement.inert = true;
+  afterElement.setAttribute("inert", "");
+  afterElement.setAttribute("aria-hidden", "true");
+  if (ritualRoom) ritualRoom.setAttribute("aria-hidden", "false");
+  if (ritualCup) ritualCup.tabIndex = -1;
+  if (afterName) afterName.setAttribute("aria-hidden", "true");
+  if (afterWord) afterWord.textContent = "";
+  if (afterSignature){
+    afterSignature.setAttribute("aria-hidden", "true");
+    afterSignature.replaceChildren();
+  }
+  if (afterReturn){
+    afterReturn.tabIndex = -1;
+    afterReturn.setAttribute("aria-hidden", "true");
+  }
+  if (ritualDialog && ritualDialog.open) ritualDialog.close();
+  resetPressure();
+  if (moveToEnd){
+    const footer = document.querySelector(".site-footer");
+    if (footer) footer.scrollIntoView({ block: "end" });
+  }
+}
+
+function acceptTypedCode(code){
+  if (ritualState.phase !== "armed") return;
+  let index = ritualState.typed.length;
+  if (code === ANSWER[index]){
+    ritualState.typed.push(code);
+  } else {
+    updateSlots(0, ritualState.typed.length > 0);
+    ritualState.typed = code === ANSWER[0] ? [code] : [];
+  }
+  updateSlots(ritualState.typed.length);
+  if (ritualState.typedTimer) clearTimeout(ritualState.typedTimer);
+  if (ritualState.typed.length === ANSWER.length){
+    unlockRitual();
+    return;
+  }
+  ritualState.typedTimer = setTimeout(clearTyped, 3200);
+}
+
 function commitAfter(raw){
   afterState.raw = Math.min(1, Math.max(0, raw));
   const reduced = still.matches || root.classList.contains("no-motion");
   const p = reduced
-    ? (afterState.raw < 0.18 ? 0 : afterState.raw < 0.64 ? 0.50 : 1)
+    ? (afterState.raw < 0.24 ? 0 : afterState.raw < 0.68 ? 0.54 : 1)
     : afterState.raw;
-  if (Math.abs(p - afterState.target) < 0.00005) return;
+  if (Math.abs(p - afterState.target) < 0.00005 &&
+      !(p === 0 && root.dataset.after !== "sealed")) return;
   afterState.target = p;
 
-  const face = range(0.62, 0.94, p);
-  const jane = range(0.14, 0.40, p) * (1 - 0.76 * face);
-  const fracture = range(0.03, 0.16, p) * (1 - range(0.30, 0.46, p));
+  const tea = 1 - range(0.08, 0.28, p);
+  const name = range(0.28, 0.40, p) * (1 - range(0.46, 0.58, p));
+  const wall = range(0.58, 0.72, p);
+  const face = range(0.70, 0.96, p);
   root.style.setProperty("--after", p.toFixed(4));
-  root.style.setProperty("--after-ui", range(0.04, 0.20, p).toFixed(4));
-  root.style.setProperty("--after-break", fracture.toFixed(4));
-  root.style.setProperty("--after-jane", jane.toFixed(4));
+  root.style.setProperty("--after-chrome",
+    (0.22 * (1 - range(0.54, 0.84, p))).toFixed(4));
+  root.style.setProperty("--after-tea", tea.toFixed(4));
+  root.style.setProperty("--after-name", name.toFixed(4));
+  root.style.setProperty("--after-wall", wall.toFixed(4));
   root.style.setProperty("--after-face", face.toFixed(4));
-  root.style.setProperty("--after-eye-left", range(0.62, 0.70, p).toFixed(4));
-  root.style.setProperty("--after-eye-right", range(0.68, 0.76, p).toFixed(4));
-  root.style.setProperty("--after-smile", range(0.72, 0.88, p).toFixed(4));
-  root.style.setProperty("--after-drips", range(0.84, 0.94, p).toFixed(4));
+  root.style.setProperty("--after-circle", range(0.70, 0.81, p).toFixed(4));
+  root.style.setProperty("--after-eye-left", range(0.78, 0.85, p).toFixed(4));
+  root.style.setProperty("--after-eye-right", range(0.81, 0.88, p).toFixed(4));
+  root.style.setProperty("--after-smile", range(0.85, 0.93, p).toFixed(4));
+  root.style.setProperty("--after-drips", range(0.91, 0.98, p).toFixed(4));
 
-  const phase = p < 0.04 ? "sealed"
-    : p < 0.14 ? "pressure"
-    : p < 0.62 ? "name"
-    : p < 0.94 ? "signature"
+  const phase = !afterState.unlocked ? "sealed"
+    : p < 0.27 ? "tea"
+    : p < 0.58 ? "name"
+    : p < 0.70 ? "wall"
+    : p < 0.97 ? "signature"
     : "found";
   if (root.dataset.after !== phase) root.dataset.after = phase;
+  const wallVisible = phase === "wall" || phase === "signature" || phase === "found";
+  if (afterName) afterName.setAttribute("aria-hidden", wallVisible ? "true" : "false");
+  if (afterSignature) afterSignature.setAttribute("aria-hidden", wallVisible ? "false" : "true");
+  if (afterReturn){
+    const found = phase === "found";
+    afterReturn.tabIndex = found ? 0 : -1;
+    afterReturn.setAttribute("aria-hidden", found ? "false" : "true");
+  }
   if (afterState.onchange) afterState.onchange();
 }
 
 function measureAfter(){
-  if (!afterElement) return;
+  if (!afterElement || !afterState.unlocked) return;
   const top = afterElement.getBoundingClientRect().top + window.scrollY;
-  afterState.start = top - window.innerHeight * 0.22;
+  afterState.start = Math.max(top, afterState.revealStart);
   afterState.end = Math.max(afterState.start + 1,
-    document.documentElement.scrollHeight - window.innerHeight);
+    top + afterElement.offsetHeight - window.innerHeight);
 }
 
 function readAfter(){
-  if (!afterElement) return;
+  if (!afterElement || !afterState.unlocked){
+    commitAfter(0);
+    return;
+  }
   commitAfter((window.scrollY - afterState.start) /
               (afterState.end - afterState.start));
 }
 
 root.dataset.after = "sealed";
+root.dataset.ritual = "sealed";
+
 if (afterElement){
-  measureAfter();
-  readAfter();
-  addEventListener("scroll", readAfter, { passive: true });
+  afterElement.inert = true;
+
+  addEventListener("wheel", event => {
+    const now = performance.now();
+    const previous = ritualState.lastWheel;
+    ritualState.lastWheel = now;
+    if (ritualState.phase !== "sealed") return;
+    if (event.deltaY <= 0 || !isAtDocumentEnd()){
+      resetPressure();
+      ritualState.lastWheel = now;
+      return;
+    }
+
+    // Inertial events keep arriving without a quiet gap. They update
+    // lastWheel but cannot begin the deliberate, second gesture.
+    if (!ritualState.wheelActive){
+      if (previous && now - previous < 180) return;
+      ritualState.wheelActive = true;
+      ritualState.wheelStarted = now;
+      ritualState.wheelPressure = 0;
+      ritualState.wheelSamples = 0;
+    } else if (now - previous > 520){
+      ritualState.wheelStarted = now;
+      ritualState.wheelPressure = 0;
+      ritualState.wheelSamples = 0;
+    }
+
+    const scale = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 20
+      : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? window.innerHeight
+      : 1;
+    ritualState.wheelPressure += Math.min(180, event.deltaY * scale);
+    ritualState.wheelSamples++;
+    if (ritualState.wheelPressure >= 760 && ritualState.wheelSamples >= 4 &&
+        now - ritualState.wheelStarted >= 70) armRitual();
+  }, { passive: true });
+
+  addEventListener("touchstart", event => {
+    if (ritualState.phase !== "sealed" || event.touches.length !== 1 ||
+        !isAtDocumentEnd()) return;
+    ritualState.touchReady = true;
+    ritualState.touchStartY = event.touches[0].clientY;
+    ritualState.touchPressure = 0;
+  }, { passive: true });
+
+  addEventListener("touchmove", event => {
+    if (!ritualState.touchReady || event.touches.length !== 1) return;
+    ritualState.touchPressure = Math.max(ritualState.touchPressure,
+      ritualState.touchStartY - event.touches[0].clientY);
+    if (ritualState.touchPressure >= 150) armRitual();
+  }, { passive: true });
+
+  addEventListener("touchend", () => {
+    ritualState.touchReady = false;
+    ritualState.touchPressure = 0;
+  }, { passive: true });
+
+  addEventListener("touchcancel", () => {
+    ritualState.touchReady = false;
+    ritualState.touchPressure = 0;
+  }, { passive: true });
+
+  addEventListener("scroll", () => {
+    if (ritualState.phase === "sealed" && !isAtDocumentEnd()) resetPressure();
+    readAfter();
+  }, { passive: true });
   addEventListener("resize", () => { measureAfter(); readAfter(); }, { passive: true });
   addEventListener("load", () => { measureAfter(); readAfter(); });
   document.querySelectorAll("details").forEach(details => {
     details.addEventListener("toggle", () => { measureAfter(); readAfter(); });
   });
 }
+
+addEventListener("keydown", event => {
+  if (event.defaultPrevented || event.repeat || event.isComposing ||
+      event.keyCode === 229 || event.metaKey || event.ctrlKey || event.altKey ||
+      isInteractiveEvent(event)) return;
+
+  if (ritualState.phase === "sealed"){
+    const down = event.key === "ArrowDown" || event.key === "PageDown" ||
+      event.key === " " || event.key === "Spacebar" || event.key === "End";
+    if (!down || !isAtDocumentEnd()) return;
+    const now = performance.now();
+    if (now > ritualState.keyDeadline) ritualState.keyPressure = 0;
+    ritualState.keyPressure++;
+    ritualState.keyDeadline = now + 4200;
+    if (ritualState.keyPressure >= 4) armRitual();
+    return;
+  }
+
+  if (ritualState.phase === "armed"){
+    if (event.key === "Escape"){
+      sealRitual();
+      return;
+    }
+    if (event.key.length !== 1 || !/^[a-z]$/i.test(event.key)) return;
+    acceptTypedCode(event.key.toUpperCase().charCodeAt(0));
+  }
+});
+
+if (ritualCup) ritualCup.addEventListener("click", () => {
+  if (ritualState.phase !== "armed" || !ritualDialog || !ritualAnswer) return;
+  ritualAnswer.value = "";
+  if (ritualDialogStatus) ritualDialogStatus.textContent = "";
+  ritualDialog.showModal();
+  requestAnimationFrame(() => ritualAnswer.focus());
+});
+
+if (ritualCancel) ritualCancel.addEventListener("click", () => ritualDialog.close());
+if (afterReturn) afterReturn.addEventListener("click", () => sealRitual(false));
+if (ritualForm) ritualForm.addEventListener("submit", event => {
+  event.preventDefault();
+  const value = ritualAnswer.value.trim().toUpperCase();
+  const expected = String.fromCharCode(...ANSWER);
+  if (value === expected){
+    ritualDialog.close();
+    ritualState.typed = ANSWER.slice();
+    updateSlots(ANSWER.length);
+    unlockRitual();
+  } else {
+    if (ritualDialogStatus) ritualDialogStatus.textContent = "Look again.";
+    ritualAnswer.select();
+  }
+});
+
+const abandonTyped = () => {
+  if (ritualState.phase === "armed") clearTyped();
+};
+addEventListener("blur", abandonTyped);
+addEventListener("pagehide", () => {
+  if (ritualState.phase === "sealed") abandonTyped();
+  else sealRitual(false);
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) abandonTyped();
+});
 
 let gl = null;
 try {
@@ -598,7 +1032,8 @@ const uni = (p, names) => {
 };
 const uS = uni(progScene, ["res","shift","camPos","camTgt","uMin","uMax","time",
                            "worldA","worldB","morph","phase","cut","focus",
-                           "inflate","split","zoom","maxSteps","after","relief","mark"]);
+                           "inflate","split","zoom","maxSteps","after","ritual",
+                           "relief","mark"]);
 const uA = uni(progAscii, ["scene","atlas","res","grid","mouse","cell","count",
                            "time","boot","lens","lensR","motion","warpK","reveal"]);
 
@@ -688,7 +1123,8 @@ function buildMark(){
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  // One allocation, one upload, one sample: normal mark / JANE / signature.
+  // One allocation, one upload, one sample: normal mark, accepted observation,
+  // and the final signature all share the same texture.
   ctx.fillStyle = "#f00";
   ctx.font = '600 38px ui-monospace,"DejaVu Sans Mono",Menlo,Consolas,monospace';
   ctx.fillText("IBVOID", W / 2, 58);
@@ -697,7 +1133,7 @@ function buildMark(){
 
   ctx.fillStyle = "#0f0";
   ctx.font = '800 162px ui-monospace,"DejaVu Sans Mono",Menlo,Consolas,monospace';
-  ctx.fillText("JANE", W / 2, 142);
+  ctx.fillText(String.fromCharCode(...ANSWER), W / 2, 142);
 
   ctx.fillStyle = "transparent";
   ctx.lineCap = "round";
@@ -711,27 +1147,57 @@ function buildMark(){
     ctx.stroke();
   };
 
-  // Blue intensity is the draw order. The control points are an original,
-  // deliberately uneven homage rather than a traced or downloaded mark.
-  stroke("#0000ff", 15, p => {
-    p.moveTo(238, 49);
-    p.bezierCurveTo(220, 76, 223, 111, 241, 132);
+  // Blue intensity is construction order. Three nearby passes establish one
+  // enclosing hand gesture before the short eyes, restrained smile, and drips.
+  // The control points are an original procedural homage, not a traced mark.
+  stroke("#0000ff", 12, p => {
+    p.moveTo(344, 48);
+    p.bezierCurveTo(416, 33, 487, 55, 515, 100);
+    p.bezierCurveTo(545, 150, 515, 199, 450, 220);
+    p.bezierCurveTo(384, 243, 307, 222, 269, 181);
+    p.bezierCurveTo(232, 140, 255, 90, 319, 57);
+    p.bezierCurveTo(325, 54, 332, 51, 335, 50);
   });
-  stroke("#0000dc", 13, p => {
-    p.moveTo(522, 45);
-    p.bezierCurveTo(540, 75, 536, 108, 516, 128);
+  stroke("#0000fa", 6, p => {
+    p.moveTo(355, 51);
+    p.bezierCurveTo(421, 39, 481, 60, 507, 102);
+    p.bezierCurveTo(534, 148, 505, 193, 446, 213);
+    p.bezierCurveTo(385, 234, 315, 216, 279, 178);
+    p.bezierCurveTo(245, 141, 265, 96, 324, 63);
+    p.bezierCurveTo(332, 58, 341, 55, 345, 53);
   });
-  stroke("#0000b8", 16, p => {
-    p.moveTo(126, 146);
-    p.bezierCurveTo(245, 236, 491, 241, 642, 137);
+  stroke("#0000f6", 4, p => {
+    p.moveTo(366, 55);
+    p.bezierCurveTo(426, 46, 474, 65, 498, 105);
+    p.bezierCurveTo(523, 145, 496, 187, 442, 206);
+    p.bezierCurveTo(391, 224, 330, 212, 296, 182);
+    p.bezierCurveTo(278, 166, 268, 148, 271, 132);
   });
-  stroke("#000092", 8, p => {
-    p.moveTo(241, 130);
-    p.bezierCurveTo(238, 149, 245, 160, 239, 178);
-    p.moveTo(517, 127);
-    p.bezierCurveTo(522, 145, 515, 155, 520, 171);
-    p.moveTo(574, 180);
-    p.bezierCurveTo(578, 196, 573, 205, 576, 219);
+  stroke("#0000d4", 10, p => {
+    p.moveTo(333, 107);
+    p.bezierCurveTo(347, 97, 367, 95, 378, 101);
+    p.moveTo(430, 106);
+    p.bezierCurveTo(448, 108, 466, 114, 477, 123);
+  });
+  stroke("#0000b8", 12, p => {
+    p.moveTo(362, 160);
+    p.bezierCurveTo(385, 172, 420, 174, 447, 162);
+  });
+  stroke("#000092", 7, p => {
+    p.moveTo(488, 74);
+    p.bezierCurveTo(493, 89, 488, 102, 492, 116);
+    p.moveTo(503, 96);
+    p.bezierCurveTo(508, 114, 503, 129, 506, 143);
+    p.moveTo(351, 101);
+    p.bezierCurveTo(349, 116, 354, 128, 350, 142);
+    p.moveTo(458, 114);
+    p.bezierCurveTo(463, 130, 458, 145, 462, 159);
+    p.moveTo(274, 174);
+    p.bezierCurveTo(272, 189, 277, 202, 273, 215);
+    p.moveTo(316, 218);
+    p.bezierCurveTo(314, 231, 319, 242, 316, 252);
+    p.moveTo(415, 232);
+    p.bezierCurveTo(419, 245, 415, 253, 417, 255);
   });
   ctx.globalCompositeOperation = "source-over";
 
@@ -892,6 +1358,7 @@ function blendCam(a, b, k){
 const S = {
   act: 0, actTarget: 0,
   after: afterState.target,
+  ritual: ritualTarget,
   mouse: [0.5, 0.5], mouseSmooth: [0.5, 0.5],
   lens: 0, lensWant: 0,
   motion: still.matches ? 0 : 1,
@@ -962,9 +1429,8 @@ function markLensUsed(){
 }
 
 addEventListener("pointerdown", event => {
-  const target = event.target instanceof Element ? event.target : null;
-  if (event.button !== 0 || afterState.target > 0.001 ||
-      (target && target.closest("a,button,summary,input,textarea,select,[contenteditable]"))) return;
+  if (event.button !== 0 || ritualState.phase !== "sealed" ||
+      afterState.target > 0.001 || isInteractiveEvent(event)) return;
   S.lensWant = 1;
   markLensUsed();
   invalidate();
@@ -1012,9 +1478,8 @@ else if (still.addListener) still.addListener(onMotionPreference);
 setMotion(!still.matches);
 
 addEventListener("keydown", e => {
-  if (e.metaKey || e.ctrlKey || e.altKey) return;
-  const target = e.target instanceof Element ? e.target : null;
-  if (target && target.closest("a,button,summary,input,textarea,select,[contenteditable]")) return;
+  if (ritualState.phase !== "sealed" || e.metaKey || e.ctrlKey || e.altKey ||
+      isInteractiveEvent(e)) return;
   if (e.key === "l" || e.key === "L"){ setLens(!lensLatched); }
   if (e.key === "m" || e.key === "M"){ setMotion(!S.motion); }
 });
@@ -1065,6 +1530,7 @@ function draw(now){
     S.boot = reduced ? 1 : Math.min(1, time / 2.8);
     S.act = reduced ? S.actTarget : damp(S.act, S.actTarget, 7.2, dt);
     S.after = reduced ? afterState.target : damp(S.after, afterState.target, 8.4, dt);
+    S.ritual = reduced ? ritualTarget : damp(S.ritual, ritualTarget, 5.8, dt);
     S.mouseSmooth[0] = reduced ? S.mouse[0] : damp(S.mouseSmooth[0], S.mouse[0], 8.0, dt);
     S.mouseSmooth[1] = reduced ? S.mouse[1] : damp(S.mouseSmooth[1], S.mouse[1], 8.0, dt);
     S.lens = damp(S.lens, S.lensWant, 12.0, dt);
@@ -1095,18 +1561,30 @@ function draw(now){
       : blendCam(camera(wa, Math.min(1, localA), mx, my),
                  camera(wb, Math.max(0, S.act - wb), mx, my),
                  smooth(0, 1, morph));
-    if (wi === 5 && S.after > 0.001){
-      const breach = smooth(0.04, 0.92, S.after);
-      cam.pos[1] += breach * 1.8;
-      cam.pos[2] -= breach * 12;
-      cam.tgt[1] -= breach * 1.2;
-      cam.shift[0] *= 1 - breach * 0.72;
-      cam.zoom += breach * 0.10;
+    if (wi === 5 && S.ritual > 0.001){
+      const ritualMix = smooth(0.02, 0.96, S.ritual);
+      const cupCam = {
+        pos: [18 + mx * 5, 27 + my * 3, 58],
+        tgt: [0, 11, 0],
+        zoom: 1.48,
+        shift: [0.30, -0.02],
+      };
+      cam = blendCam(cam, cupCam, ritualMix);
+      if (S.after > 0.001){
+        const breach = smooth(0.54, 0.82, S.after);
+        const wallCam = {
+          pos: [mx * 3, 21 + my * 2, 72 - breach * 7],
+          tgt: [0, 18, 0],
+          zoom: 1.46,
+          shift: [0, -0.04],
+        };
+        cam = blendCam(cam, wallCam, breach);
+      }
     }
     if (innerWidth < 900) cam.shift = [0, 0.10];
 
-    const fracture = smooth(0.03, 0.16, S.after) *
-                     (1 - smooth(0.30, 0.46, S.after));
+    const fracture = smooth(0.10, 0.24, S.after) *
+                     (1 - smooth(0.31, 0.44, S.after));
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.viewport(0, 0, fboW, fboH);
@@ -1129,6 +1607,7 @@ function draw(now){
     gl.uniform1f(uS.zoom, cam.zoom);
     gl.uniform1f(uS.maxSteps, maxSteps);
     gl.uniform1f(uS.after, S.after);
+    gl.uniform1f(uS.ritual, S.ritual);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texRel);
     gl.activeTexture(gl.TEXTURE1);
@@ -1153,7 +1632,8 @@ function draw(now){
     gl.uniform1f(uA.count, atlas.count);
     gl.uniform1f(uA.time, reduced ? 0 : time);
     gl.uniform1f(uA.boot, S.boot);
-    gl.uniform1f(uA.lens, S.lens * (1 - smooth(0.08, 0.24, S.after)));
+    gl.uniform1f(uA.lens, S.lens *
+      (1 - smooth(0.08, 0.24, Math.max(S.after, S.ritual))));
     gl.uniform1f(uA.lensR, Math.min(canvas.width, canvas.height) * 0.19);
     gl.uniform1f(uA.motion, S.motion);
     gl.uniform1f(uA.warpK, reduced ? 0 : 0.50);
@@ -1223,6 +1703,7 @@ function draw(now){
 
     const unsettled = Math.abs(S.act - S.actTarget) > 0.001 ||
                       Math.abs(S.after - afterState.target) > 0.001 ||
+                      Math.abs(S.ritual - ritualTarget) > 0.001 ||
                       Math.abs(S.mouseSmooth[0] - S.mouse[0]) > 0.001 ||
                       Math.abs(S.mouseSmooth[1] - S.mouse[1]) > 0.001 ||
                       Math.abs(S.lens - S.lensWant) > 0.001 ||

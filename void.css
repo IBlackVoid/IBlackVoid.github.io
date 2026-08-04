@@ -18,10 +18,12 @@
   --top: 72px;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --after: 0;
-  --after-ui: 0;
-  --after-break: 0;
-  --after-jane: 0;
+  --after-chrome: 0.22;
+  --after-tea: 1;
+  --after-name: 0;
+  --after-wall: 0;
   --after-face: 0;
+  --after-circle: 0;
   --after-eye-left: 0;
   --after-eye-right: 0;
   --after-smile: 0;
@@ -71,6 +73,18 @@ button,
 a,
 summary {
   -webkit-tap-highlight-color: transparent;
+}
+
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
 }
 
 :focus-visible {
@@ -1092,15 +1106,38 @@ details p {
   text-transform: uppercase;
 }
 
-/* The unindexed after-state begins only after the real footer. Its first
- * viewport is intentionally silent: native scrolling supplies the pressure,
- * then the final voxel mark yields without trapping wheel, touch, or keys. */
+/* The public story genuinely ends at the footer. This section is one clipped
+ * pixel until a fresh gesture keeps pressing down at that exact boundary.
+ * Arming expands normal document flow; neither wheel nor touch is cancelled. */
 .afterimage {
   position: relative;
   z-index: 20;
-  min-height: 300vh;
-  min-height: 300svh;
+  width: 100%;
+  height: 1px;
+  min-height: 1px;
+  overflow: clip;
   pointer-events: none;
+  contain: layout style;
+}
+
+.afterimage:focus { outline: 0; }
+
+[data-ritual="armed"] .afterimage {
+  height: 112vh;
+  height: 112svh;
+  min-height: 112vh;
+  min-height: 112svh;
+  overflow: visible;
+  pointer-events: auto;
+}
+
+[data-ritual="unlocked"] .afterimage {
+  height: 370vh;
+  height: 370svh;
+  min-height: 370vh;
+  min-height: 370svh;
+  overflow: visible;
+  pointer-events: auto;
 }
 
 .afterimage-scene {
@@ -1113,82 +1150,251 @@ details p {
   place-items: center;
   overflow: hidden;
   isolation: isolate;
+  visibility: hidden;
+  opacity: 0;
+  background: rgba(8, 10, 9, 0.18);
+  transition: opacity 700ms ease, visibility 0s linear 700ms;
 }
 
-.afterimage-scene::before {
+[data-ritual="armed"] .afterimage-scene,
+[data-ritual="unlocked"] .afterimage-scene {
+  visibility: visible;
+  opacity: 1;
+  transition-delay: 0s;
+}
+
+.afterimage-scene::before,
+.afterimage-scene::after {
   content: "";
   position: absolute;
   inset: 0;
   z-index: -1;
+  pointer-events: none;
+}
+
+.afterimage-scene::before {
   background:
-    radial-gradient(56% 48% at 50% 48%, rgba(92, 8, 25, 0.13), transparent 68%),
-    linear-gradient(180deg, rgba(9, 10, 9, 0.08), rgba(9, 10, 9, 0.74));
-  opacity: var(--after-ui);
+    radial-gradient(48% 46% at 50% 48%, rgba(67, 167, 163, 0.10), transparent 72%),
+    linear-gradient(180deg, rgba(7, 9, 8, 0.12), rgba(7, 9, 8, 0.82));
+  opacity: var(--after-tea);
 }
 
-.afterimage-fracture {
-  position: absolute;
-  inset: 0;
-  opacity: var(--after-break);
+.afterimage-scene::after {
+  background:
+    radial-gradient(58% 58% at 50% 50%, rgba(120, 12, 34, 0.09), transparent 68%),
+    linear-gradient(180deg, rgba(225, 218, 201, 0.02), rgba(75, 6, 20, 0.22));
+  opacity: var(--after-wall);
 }
 
-.afterimage-fracture i {
+.ritual-room {
   position: absolute;
+  inset: 50% auto auto 50%;
+  display: grid;
+  grid-template-columns: minmax(170px, 230px) minmax(220px, 310px);
+  align-items: center;
+  gap: clamp(24px, 5vw, 70px);
+  width: min(78vw, 660px);
+  opacity: var(--after-tea);
+  transform: translate(-50%, -47%) scale(calc(0.975 + var(--after-tea) * 0.025));
+  transition: transform 700ms var(--ease-out);
+}
+
+.ritual-cup {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--aqua-soft);
+  cursor: pointer;
+  filter: drop-shadow(0 28px 34px rgba(0, 0, 0, 0.46));
+  justify-self: end;
+  width: min(17vw, 220px);
+}
+
+.ritual-cup::before {
+  content: "";
+  position: absolute;
+  inset: 25% 12% 8%;
+  z-index: -1;
+  border-radius: 50%;
+  background: rgba(67, 178, 174, 0.13);
+  filter: blur(34px);
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 420ms ease, transform 620ms var(--ease-out);
+}
+
+.ritual-cup:hover::before,
+.ritual-cup:focus-visible::before {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.ritual-cup:focus-visible {
+  outline: 1px solid rgba(183, 240, 232, 0.58);
+  outline-offset: 8px;
+}
+
+.ritual-cup svg {
   display: block;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(241, 238, 231, 0.42), transparent);
-  box-shadow: 0 0 18px rgba(189, 18, 56, 0.12);
-  transform-origin: center;
+  width: 100%;
+  overflow: visible;
+  transform: rotate(-1.2deg);
 }
 
-.afterimage-fracture i:nth-child(1) {
-  top: 29%;
-  left: 7%;
-  width: 64%;
-  transform: rotate(-1.7deg);
+.gl-ready .ritual-cup svg {
+  opacity: 0.08;
+  mix-blend-mode: screen;
 }
 
-.afterimage-fracture i:nth-child(2) {
-  top: 53%;
-  right: 5%;
-  width: 58%;
-  transform: rotate(1.1deg);
+.tea-shadow { fill: rgba(0, 0, 0, 0.46); }
+.tea-saucer { fill: url("#porcelain"); opacity: 0.78; }
+.tea-saucer-rim { fill: rgba(31, 86, 87, 0.38); }
+.tea-handle,
+.tea-cup-body { fill: url("#porcelain"); }
+.tea-rim { fill: #d8fbf4; }
+.tea-liquid { fill: url("#tea"); }
+.tea-glint {
+  fill: none;
+  stroke: rgba(233, 255, 251, 0.56);
+  stroke-width: 8;
+  stroke-linecap: round;
 }
 
-.afterimage-fracture i:nth-child(3) {
-  bottom: 22%;
-  left: 24%;
-  width: 71%;
-  transform: rotate(-0.6deg);
+.tea-steam path {
+  fill: none;
+  stroke: rgba(221, 247, 241, 0.46);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 8 11;
+  animation: tea-steam 3.8s linear infinite;
 }
+
+.tea-steam path:nth-child(2) { animation-delay: -1.3s; }
+.tea-steam path:nth-child(3) { animation-delay: -2.4s; }
+
+@keyframes tea-steam {
+  0% { stroke-dashoffset: 0; opacity: 0.18; transform: translateY(5px); }
+  45% { opacity: 0.72; }
+  100% { stroke-dashoffset: -38; opacity: 0.08; transform: translateY(-5px); }
+}
+
+.ritual-cup-label {
+  justify-self: center;
+  margin-top: -14px;
+  color: rgba(183, 240, 232, 0.46);
+  font: 500 8px/1 var(--mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  opacity: 0;
+  transform: translateY(5px);
+  transition: opacity 260ms ease, transform 360ms var(--ease-out);
+}
+
+.ritual-cup:hover .ritual-cup-label,
+.ritual-cup:focus-visible .ritual-cup-label {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.ritual-copy {
+  align-self: center;
+  padding-left: clamp(18px, 3vw, 44px);
+  border-left: 1px solid rgba(183, 240, 232, 0.18);
+}
+
+.ritual-eyebrow {
+  margin: 0 0 17px;
+  color: rgba(183, 240, 232, 0.50);
+  font: 500 8px/1 var(--mono);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+#ritual-clue {
+  margin: 0 0 26px;
+  color: rgba(241, 238, 231, 0.78);
+  font: 430 clamp(17px, 1.8vw, 22px)/1.35 var(--sans);
+  letter-spacing: -0.02em;
+}
+
+.ritual-slots {
+  display: grid;
+  grid-template-columns: repeat(4, 34px);
+  gap: 10px;
+  width: max-content;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ritual-slots li {
+  position: relative;
+  height: 34px;
+  border-bottom: 1px solid rgba(183, 240, 232, 0.28);
+}
+
+.ritual-slots li::before {
+  content: "";
+  position: absolute;
+  inset: 7px 9px;
+  border-radius: 50%;
+  background: var(--aqua-soft);
+  box-shadow: 0 0 18px rgba(116, 216, 206, 0.54);
+  opacity: 0;
+  transform: scale(0.45);
+  transition: opacity 180ms ease, transform 320ms var(--ease-out);
+}
+
+.ritual-slots li.is-filled::before {
+  opacity: 0.82;
+  transform: scale(1);
+}
+
+.ritual-slots li.is-error {
+  border-color: rgba(237, 106, 56, 0.72);
+  animation: ritual-error 260ms ease;
+}
+
+@keyframes ritual-error {
+  0%, 100% { transform: translateX(0); }
+  35% { transform: translateX(-4px); }
+  70% { transform: translateX(4px); }
+}
+
+.ritual-hint {
+  margin: 18px 0 0;
+  color: rgba(173, 184, 179, 0.40);
+  font: 500 8px/1.4 var(--mono);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.touch-hint { display: none; }
 
 .afterimage-name {
   position: absolute;
   inset: 50% auto auto 50%;
   width: min(92vw, 1120px);
   margin: 0;
-  opacity: var(--after-jane);
+  opacity: var(--after-name);
   text-align: center;
-  transform: translate(-50%, -45%) scale(0.985);
-  transition: transform 420ms var(--ease-out);
-}
-
-[data-after="name"] .afterimage-name,
-[data-after="signature"] .afterimage-name,
-[data-after="found"] .afterimage-name {
-  transform: translate(-50%, -50%) scale(1);
+  transform: translate(-50%, -46%) scale(calc(0.985 + var(--after-name) * 0.015));
 }
 
 .afterimage-name span {
   display: block;
-  margin-bottom: 14px;
-  color: rgba(241, 238, 231, 0.52);
-  font: 500 9px/1 var(--mono);
-  letter-spacing: 0.28em;
+  margin-bottom: 18px;
+  color: rgba(241, 238, 231, 0.48);
+  font: 500 8px/1 var(--mono);
+  letter-spacing: 0.30em;
   text-transform: uppercase;
 }
 
-.afterimage-name h2 {
+.afterimage-word {
   max-width: none;
   margin: 0;
   color: transparent;
@@ -1196,87 +1402,113 @@ details p {
   letter-spacing: 0.12em;
   text-indent: 0.12em;
   -webkit-text-stroke: 1px rgba(241, 238, 231, 0.72);
-  text-shadow:
-    0 0 34px rgba(241, 238, 231, 0.11),
-    0 18px 80px rgba(0, 0, 0, 0.84);
+  text-shadow: 0 0 34px rgba(241, 238, 231, 0.10), 0 18px 80px rgba(0, 0, 0, 0.84);
 }
 
-.gl-ready .afterimage-name {
-  opacity: var(--after-jane);
+.afterimage-name > p:last-child {
+  margin: 24px 0 0;
+  color: rgba(241, 238, 231, 0.46);
+  font: 500 9px/1 var(--mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
 }
 
-.gl-ready .afterimage-name h2,
-.gl-ready .afterimage-name span {
-  opacity: 0.24;
-}
+.gl-ready .afterimage-name { opacity: calc(var(--after-name) * 0.46); }
 
 .afterimage-signature {
   position: absolute;
-  inset: 50% auto auto 50%;
-  width: min(76vw, 720px);
+  inset: 0;
+  width: 100%;
+  height: 100%;
   margin: 0;
-  opacity: var(--after-face);
-  transform: translate(-50%, -50%) rotate(-1.2deg);
+  overflow: hidden;
+  opacity: var(--after-wall);
+  background:
+    linear-gradient(91deg, transparent 0 61%, rgba(55, 46, 38, 0.10) 61.4%, transparent 62.1%),
+    radial-gradient(ellipse at 28% 20%, rgba(224, 217, 205, 0.16), transparent 43%),
+    radial-gradient(ellipse at 78% 72%, rgba(67, 54, 44, 0.20), transparent 52%),
+    linear-gradient(180deg, #958c80, #80776d);
+  box-shadow: inset 0 0 150px rgba(39, 28, 21, 0.30);
+  transform: scale(calc(1.015 - var(--after-wall) * 0.015));
+  transform-origin: center;
+}
+
+.afterimage-signature::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent 17%, rgba(46, 34, 27, 0.055) 18%, transparent 18.8%, transparent 83%, rgba(54, 41, 32, 0.045) 84%, transparent 85%),
+    linear-gradient(112deg, rgba(255, 255, 255, 0.075), transparent 43%, rgba(51, 37, 28, 0.12));
+  mix-blend-mode: multiply;
 }
 
 .afterimage-signature svg {
   display: block;
   width: 100%;
+  height: 100%;
   overflow: visible;
-  filter: drop-shadow(0 0 24px rgba(189, 18, 56, 0.22));
-}
-
-.gl-ready .afterimage-signature svg {
-  opacity: 0.34;
+  filter: drop-shadow(0 1px 1px rgba(50, 3, 12, 0.20));
 }
 
 .afterimage-signature path {
   fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  /* A slight overrun closes the final sub-pixel of the normalized path. At
+     exactly 1 some SVG rasterizers leave a visible seam where the circle's
+     start and end meet. */
+  stroke-dasharray: 1.025 1;
   vector-effect: non-scaling-stroke;
 }
 
 .signature-shadow path {
-  stroke: rgba(189, 18, 56, 0.24);
-  stroke-width: 24;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  filter: blur(7px);
+  stroke: rgba(67, 3, 17, 0.18);
+  stroke-width: 15;
+  filter: blur(2px);
 }
+.signature-shadow { opacity: var(--after-circle); }
 
 .signature-ink path {
-  stroke: var(--blood);
-  stroke-width: 10;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-dasharray: 1;
+  stroke: #7a0a21;
+  stroke-width: 7;
 }
 
-.signature-eye-left {
-  stroke-dashoffset: calc(1 - var(--after-eye-left));
+.signature-circle path {
+  /* All three lanes travel clockwise from the same broken upper-left start,
+     so the reveal reads as one hand gesture rather than three icons fading in. */
+  stroke-dasharray: 1.025 1;
+  stroke-dashoffset: calc(1 - var(--after-circle));
+  opacity: var(--after-circle);
 }
 
-.signature-eye-right {
-  stroke-dashoffset: calc(1 - var(--after-eye-right));
-}
+.signature-circle path:first-child { stroke: #8d0d29; stroke-width: 11px; }
+.signature-circle path:nth-child(2) { stroke: rgba(101, 8, 26, 0.62); stroke-width: 6px; }
+.signature-circle path:nth-child(3) { stroke: rgba(154, 18, 48, 0.74); stroke-width: 4px; }
+.signature-eye-left { stroke-dashoffset: calc(1 - var(--after-eye-left)); }
+.signature-eye-right { stroke-dashoffset: calc(1 - var(--after-eye-right)); }
+.signature-eye-left,
+.signature-eye-right { stroke-width: 8.5px !important; }
+.signature-smile { stroke-width: 8.5 !important; stroke-dashoffset: calc(1 - var(--after-smile)); }
+.signature-smile-faint { stroke: rgba(101, 8, 26, 0.58) !important; stroke-width: 3.5px !important; }
+.signature-smile-fray { stroke: rgba(154, 18, 48, 0.68) !important; stroke-width: 2.5px !important; }
+.signature-drip { stroke-width: 3.5px !important; stroke-dashoffset: calc(1 - var(--after-drips)); }
+.signature-drip.is-heavy { stroke-width: 5px !important; }
+.signature-drip.is-thin { stroke-width: 2.2px !important; }
 
-.signature-smile {
-  stroke-width: 12 !important;
-  stroke-dashoffset: calc(1 - var(--after-smile));
-}
-
-.signature-drip {
-  stroke-width: 7 !important;
-  stroke-dashoffset: calc(1 - var(--after-drips));
-}
+.signature-eye-left { opacity: var(--after-eye-left); }
+.signature-eye-right { opacity: var(--after-eye-right); }
+.signature-smile { opacity: var(--after-smile); }
+.signature-drip { opacity: var(--after-drips); }
 
 .afterimage-return {
   position: absolute;
-  right: auto;
   bottom: max(24px, env(safe-area-inset-bottom));
   left: 50%;
   z-index: 2;
   padding: 10px 0;
-  border-bottom: 1px solid rgba(189, 18, 56, 0.52);
+  border-bottom: 1px solid rgba(156, 10, 43, 0.56);
   color: rgba(241, 238, 231, 0.72);
   font: 500 9px/1 var(--mono);
   letter-spacing: 0.15em;
@@ -1285,10 +1517,7 @@ details p {
   visibility: hidden;
   pointer-events: none;
   transform: translate(-50%, 8px);
-  transition:
-    opacity 260ms ease,
-    transform 360ms var(--ease-out),
-    visibility 0s linear 360ms;
+  transition: opacity 260ms ease, transform 360ms var(--ease-out), visibility 0s linear 360ms;
 }
 
 [data-after="found"] .afterimage-return,
@@ -1300,19 +1529,81 @@ details p {
   transition-delay: 0s;
 }
 
+.ritual-dialog {
+  width: min(92vw, 470px);
+  padding: 0;
+  border: 1px solid rgba(183, 240, 232, 0.24);
+  border-radius: 0;
+  background: rgba(10, 14, 13, 0.98);
+  color: var(--ink);
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.72);
+}
+
+.ritual-dialog::backdrop {
+  background: rgba(3, 5, 4, 0.82);
+  backdrop-filter: blur(8px);
+}
+
+.ritual-dialog-card { padding: clamp(25px, 6vw, 44px); }
+.ritual-dialog h2 { margin: 0 0 28px; font-size: clamp(28px, 7vw, 42px); }
+.ritual-dialog label {
+  display: block;
+  margin-bottom: 9px;
+  color: var(--dim);
+  font: 500 9px/1 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.ritual-dialog input {
+  width: 100%;
+  padding: 13px 2px;
+  border: 0;
+  border-bottom: 1px solid rgba(183, 240, 232, 0.38);
+  outline: 0;
+  background: transparent;
+  color: var(--aqua-soft);
+  font: 600 30px/1 var(--mono);
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+}
+
+.ritual-dialog input:focus { border-color: var(--aqua-soft); }
+.ritual-dialog-status { min-height: 1.5em; margin: 10px 0 0; color: var(--oxide); font: 500 9px/1.5 var(--mono); }
+.ritual-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 26px; }
+.ritual-dialog-actions button {
+  min-height: 44px;
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: 500 9px/1 var(--mono);
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+.ritual-dialog-actions button:last-child { border-color: rgba(116, 216, 206, 0.52); color: var(--aqua-soft); }
+.ritual-dialog-actions button:focus-visible { outline: 1px solid var(--aqua-soft); outline-offset: 2px; }
+
 .topbar,
 .chapter-rail,
 .controls {
   transition: opacity 420ms ease, transform 420ms var(--ease-out);
 }
 
-html:not([data-after="sealed"]) .topbar:not(:focus-within),
-html:not([data-after="sealed"]) .chapter-rail:not(:focus-within),
-html:not([data-after="sealed"]) .controls:not(:focus-within) {
+html:not([data-ritual="sealed"]) .topbar:not(:focus-within),
+html:not([data-ritual="sealed"]) .chapter-rail:not(:focus-within),
+html:not([data-ritual="sealed"]) .controls:not(:focus-within) {
   opacity: 0.22;
 }
 
-html:not([data-after="sealed"]) .topbar:not(:focus-within) {
+html[data-ritual="unlocked"] .topbar:not(:focus-within),
+html[data-ritual="unlocked"] .chapter-rail:not(:focus-within),
+html[data-ritual="unlocked"] .controls:not(:focus-within) {
+  opacity: var(--after-chrome);
+}
+
+html:not([data-ritual="sealed"]) .topbar:not(:focus-within) {
   transform: translateY(-5px);
 }
 
@@ -1361,11 +1652,13 @@ html:not([data-after="sealed"]) .topbar:not(:focus-within) {
  * still resolves into the intended void rather than a stale first scene. */
 .no-gl #poster,
 .gl-failed #poster {
-  opacity: calc(1 - var(--after-ui));
+  opacity: 1;
 }
 
-.no-gl:not([data-after="sealed"]) .chapter-rail,
-.gl-failed:not([data-after="sealed"]) .chapter-rail {
+.no-gl:not([data-ritual="sealed"]) #poster,
+.gl-failed:not([data-ritual="sealed"]) #poster,
+.no-gl:not([data-ritual="sealed"]) .chapter-rail,
+.gl-failed:not([data-ritual="sealed"]) .chapter-rail {
   opacity: 0;
   visibility: hidden;
 }
@@ -1524,22 +1817,86 @@ html:not([data-after="sealed"]) .topbar:not(:focus-within) {
   .controls { right: 9px; bottom: 9px; }
   .controls button { padding: 8px; }
 
-  .afterimage-name {
-    width: 100vw;
+  .ritual-room {
+    inset: 0;
+    display: block;
+    width: 100%;
+    transform: none;
+    pointer-events: none;
   }
 
-  .afterimage-name h2 {
+  .ritual-cup {
+    position: absolute;
+    top: 35%;
+    left: 50%;
+    width: min(30vw, 132px);
+    transform: translate(-50%, -50%);
+    pointer-events: auto;
+  }
+
+  .ritual-copy {
+    position: absolute;
+    bottom: max(96px, calc(env(safe-area-inset-bottom) + 82px));
+    left: 50%;
+    width: min(calc(100vw - 42px), 360px);
+    padding: 17px 19px 19px;
+    border-top: 1px solid rgba(183, 240, 232, 0.26);
+    border-left: 0;
+    background:
+      linear-gradient(90deg, rgba(76, 174, 167, 0.08), transparent 58%),
+      rgba(7, 10, 9, 0.92);
+    box-shadow: 0 18px 54px rgba(0, 0, 0, 0.44);
+    text-align: left;
+    transform: translateX(-50%);
+    pointer-events: auto;
+  }
+
+  .ritual-copy::after {
+    content: "";
+    position: absolute;
+    top: -1px;
+    right: 0;
+    width: 38px;
+    height: 1px;
+    background: var(--aqua-soft);
+    box-shadow: 0 0 14px rgba(116, 216, 206, 0.42);
+  }
+
+  .ritual-eyebrow { margin-bottom: 12px; }
+  #ritual-clue { margin-bottom: 15px; }
+  .ritual-slots {
+    grid-template-columns: repeat(4, 30px);
+    gap: 9px;
+    margin: 0;
+  }
+  .ritual-slots li { height: 30px; }
+  .ritual-hint { margin-top: 13px; }
+  .desktop-hint { display: none; }
+  .touch-hint { display: inline; }
+  .ritual-hint { color: rgba(173, 184, 179, 0.72); }
+  .ritual-cup-label {
+    opacity: 0.62;
+    transform: translateY(2px);
+  }
+  .afterimage-name { width: 100vw; }
+
+  .afterimage-word {
     font-size: clamp(86px, 27vw, 170px);
     letter-spacing: 0.07em;
     text-indent: 0.07em;
   }
 
-  .afterimage-signature {
-    width: min(94vw, 560px);
-  }
-
   .afterimage-return {
     bottom: max(82px, calc(env(safe-area-inset-bottom) + 70px));
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .desktop-hint { display: none; }
+  .touch-hint { display: inline; }
+  .ritual-cup-label {
+    opacity: 0.62;
+    transform: translateY(0);
   }
 }
 
@@ -1569,6 +1926,8 @@ html:not([data-after="sealed"]) .topbar:not(:focus-within) {
 
   .afterimage-name,
   .afterimage-signature,
+  .ritual-room,
+  .ritual-cup::before,
   .afterimage-return,
   .topbar,
   .chapter-rail,
@@ -1579,6 +1938,8 @@ html:not([data-after="sealed"]) .topbar:not(:focus-within) {
   .afterimage-signature svg {
     filter: none;
   }
+
+  .tea-steam path { animation: none !important; }
 }
 
 .no-motion .cue-ring,
@@ -1588,6 +1949,8 @@ html:not([data-after="sealed"]) .topbar:not(:focus-within) {
 
 .no-motion .afterimage-name,
 .no-motion .afterimage-signature,
+.no-motion .ritual-room,
+.no-motion .ritual-cup::before,
 .no-motion .afterimage-return,
 .no-motion .topbar,
 .no-motion .chapter-rail,
@@ -1598,6 +1961,8 @@ html:not([data-after="sealed"]) .topbar:not(:focus-within) {
 .no-motion .afterimage-signature svg {
   filter: none;
 }
+
+.no-motion .tea-steam path { animation: none; }
 
 
 /* Orientation hint. A suggestion, never a gate: the page works in portrait,
@@ -1718,4 +2083,27 @@ html:not([data-after="sealed"]) .topbar:not(:focus-within) {
   .chapter-rail { right: 10px; }
   .site-footer { padding-bottom: 26px; }
   .controls button { padding: 6px 8px; }
+
+  /* The armed room inherits the portrait stack when height is scarce. On a
+     phone held sideways that put its catcher panel directly over the cup,
+     hiding the tell it asks the visitor to inspect. Spend the available width
+     instead: the cup and its hit target stay centred on the WebGL form while
+     the prompt occupies the quiet right-hand third. */
+  .ritual-copy {
+    top: 50%;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: auto;
+    left: auto;
+    width: min(40vw, 360px);
+    transform: translateY(-50%);
+  }
+
+  /* The public chapter readout sits in the same right-edge lane as the
+     landscape catcher. Once the hidden room opens it no longer describes the
+     current scene, so retire it instead of letting "05" cut through the
+     panel's illuminated edge. */
+  html:not([data-ritual="sealed"]) .chapter-rail {
+    visibility: hidden;
+    opacity: 0;
+  }
 }
