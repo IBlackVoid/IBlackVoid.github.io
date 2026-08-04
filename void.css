@@ -9,6 +9,7 @@
   --aqua: #74d8ce;
   --aqua-soft: #b7f0e8;
   --oxide: #ed6a38;
+  --blood: #bd1238;
   --green: #6fd08b;
   --warm: #f2c78f;
   --sans: "Segoe UI Variable", "Aptos", "Helvetica Neue", Arial, sans-serif;
@@ -16,6 +17,15 @@
   --gutter: clamp(20px, 4.4vw, 76px);
   --top: 72px;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --after: 0;
+  --after-ui: 0;
+  --after-break: 0;
+  --after-jane: 0;
+  --after-face: 0;
+  --after-eye-left: 0;
+  --after-eye-right: 0;
+  --after-smile: 0;
+  --after-drips: 0;
 }
 
 *,
@@ -1082,6 +1092,230 @@ details p {
   text-transform: uppercase;
 }
 
+/* The unindexed after-state begins only after the real footer. Its first
+ * viewport is intentionally silent: native scrolling supplies the pressure,
+ * then the final voxel mark yields without trapping wheel, touch, or keys. */
+.afterimage {
+  position: relative;
+  z-index: 20;
+  min-height: 300vh;
+  min-height: 300svh;
+  pointer-events: none;
+}
+
+.afterimage-scene {
+  position: sticky;
+  top: 0;
+  display: grid;
+  width: 100%;
+  height: 100vh;
+  height: 100svh;
+  place-items: center;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.afterimage-scene::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(56% 48% at 50% 48%, rgba(92, 8, 25, 0.13), transparent 68%),
+    linear-gradient(180deg, rgba(9, 10, 9, 0.08), rgba(9, 10, 9, 0.74));
+  opacity: var(--after-ui);
+}
+
+.afterimage-fracture {
+  position: absolute;
+  inset: 0;
+  opacity: var(--after-break);
+}
+
+.afterimage-fracture i {
+  position: absolute;
+  display: block;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(241, 238, 231, 0.42), transparent);
+  box-shadow: 0 0 18px rgba(189, 18, 56, 0.12);
+  transform-origin: center;
+}
+
+.afterimage-fracture i:nth-child(1) {
+  top: 29%;
+  left: 7%;
+  width: 64%;
+  transform: rotate(-1.7deg);
+}
+
+.afterimage-fracture i:nth-child(2) {
+  top: 53%;
+  right: 5%;
+  width: 58%;
+  transform: rotate(1.1deg);
+}
+
+.afterimage-fracture i:nth-child(3) {
+  bottom: 22%;
+  left: 24%;
+  width: 71%;
+  transform: rotate(-0.6deg);
+}
+
+.afterimage-name {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: min(92vw, 1120px);
+  margin: 0;
+  opacity: var(--after-jane);
+  text-align: center;
+  transform: translate(-50%, -45%) scale(0.985);
+  transition: transform 420ms var(--ease-out);
+}
+
+[data-after="name"] .afterimage-name,
+[data-after="signature"] .afterimage-name,
+[data-after="found"] .afterimage-name {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.afterimage-name span {
+  display: block;
+  margin-bottom: 14px;
+  color: rgba(241, 238, 231, 0.52);
+  font: 500 9px/1 var(--mono);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+.afterimage-name h2 {
+  max-width: none;
+  margin: 0;
+  color: transparent;
+  font: 680 clamp(104px, 25vw, 360px)/0.72 var(--mono);
+  letter-spacing: 0.12em;
+  text-indent: 0.12em;
+  -webkit-text-stroke: 1px rgba(241, 238, 231, 0.72);
+  text-shadow:
+    0 0 34px rgba(241, 238, 231, 0.11),
+    0 18px 80px rgba(0, 0, 0, 0.84);
+}
+
+.gl-ready .afterimage-name {
+  opacity: var(--after-jane);
+}
+
+.gl-ready .afterimage-name h2,
+.gl-ready .afterimage-name span {
+  opacity: 0.24;
+}
+
+.afterimage-signature {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: min(76vw, 720px);
+  margin: 0;
+  opacity: var(--after-face);
+  transform: translate(-50%, -50%) rotate(-1.2deg);
+}
+
+.afterimage-signature svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 0 24px rgba(189, 18, 56, 0.22));
+}
+
+.gl-ready .afterimage-signature svg {
+  opacity: 0.34;
+}
+
+.afterimage-signature path {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.signature-shadow path {
+  stroke: rgba(189, 18, 56, 0.24);
+  stroke-width: 24;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: blur(7px);
+}
+
+.signature-ink path {
+  stroke: var(--blood);
+  stroke-width: 10;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+}
+
+.signature-eye-left {
+  stroke-dashoffset: calc(1 - var(--after-eye-left));
+}
+
+.signature-eye-right {
+  stroke-dashoffset: calc(1 - var(--after-eye-right));
+}
+
+.signature-smile {
+  stroke-width: 12 !important;
+  stroke-dashoffset: calc(1 - var(--after-smile));
+}
+
+.signature-drip {
+  stroke-width: 7 !important;
+  stroke-dashoffset: calc(1 - var(--after-drips));
+}
+
+.afterimage-return {
+  position: absolute;
+  right: auto;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 2;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(189, 18, 56, 0.52);
+  color: rgba(241, 238, 231, 0.72);
+  font: 500 9px/1 var(--mono);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate(-50%, 8px);
+  transition:
+    opacity 260ms ease,
+    transform 360ms var(--ease-out),
+    visibility 0s linear 360ms;
+}
+
+[data-after="found"] .afterimage-return,
+.afterimage-return:focus-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+  transition-delay: 0s;
+}
+
+.topbar,
+.chapter-rail,
+.controls {
+  transition: opacity 420ms ease, transform 420ms var(--ease-out);
+}
+
+html:not([data-after="sealed"]) .topbar:not(:focus-within),
+html:not([data-after="sealed"]) .chapter-rail:not(:focus-within),
+html:not([data-after="sealed"]) .controls:not(:focus-within) {
+  opacity: 0.22;
+}
+
+html:not([data-after="sealed"]) .topbar:not(:focus-within) {
+  transform: translateY(-5px);
+}
+
 .controls {
   position: fixed;
   right: clamp(18px, 3vw, 48px);
@@ -1120,6 +1354,20 @@ details p {
 .no-gl .controls,
 .gl-failed .controls {
   display: none;
+}
+
+/* The fallback poster belongs to arrival, not the hidden ending. Let it fall
+ * away with the same pressure signal so a failed or unavailable GL context
+ * still resolves into the intended void rather than a stale first scene. */
+.no-gl #poster,
+.gl-failed #poster {
+  opacity: calc(1 - var(--after-ui));
+}
+
+.no-gl:not([data-after="sealed"]) .chapter-rail,
+.gl-failed:not([data-after="sealed"]) .chapter-rail {
+  opacity: 0;
+  visibility: hidden;
 }
 
 .debug-hud {
@@ -1275,6 +1523,24 @@ details p {
 
   .controls { right: 9px; bottom: 9px; }
   .controls button { padding: 8px; }
+
+  .afterimage-name {
+    width: 100vw;
+  }
+
+  .afterimage-name h2 {
+    font-size: clamp(86px, 27vw, 170px);
+    letter-spacing: 0.07em;
+    text-indent: 0.07em;
+  }
+
+  .afterimage-signature {
+    width: min(94vw, 560px);
+  }
+
+  .afterimage-return {
+    bottom: max(82px, calc(env(safe-area-inset-bottom) + 70px));
+  }
 }
 
 @media (max-width: 380px) {
@@ -1300,6 +1566,19 @@ details p {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+
+  .afterimage-name,
+  .afterimage-signature,
+  .afterimage-return,
+  .topbar,
+  .chapter-rail,
+  .controls {
+    transition: none !important;
+  }
+
+  .afterimage-signature svg {
+    filter: none;
+  }
 }
 
 .no-motion .cue-ring,
@@ -1307,7 +1586,18 @@ details p {
   animation: none;
 }
 
+.no-motion .afterimage-name,
+.no-motion .afterimage-signature,
+.no-motion .afterimage-return,
+.no-motion .topbar,
+.no-motion .chapter-rail,
+.no-motion .controls {
+  transition: none;
+}
 
+.no-motion .afterimage-signature svg {
+  filter: none;
+}
 
 
 /* Orientation hint. A suggestion, never a gate: the page works in portrait,

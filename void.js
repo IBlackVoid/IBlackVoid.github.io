@@ -57,7 +57,7 @@ precision highp float;
 uniform vec2      uRes, uShift;
 uniform vec3      uCamPos, uCamTgt, uUMin, uUMax;
 uniform float     uTime, uWorldA, uWorldB, uMorph, uPhase, uCut, uFocus,
-                  uInflate, uSplit, uZoom, uMaxSteps;
+                  uInflate, uSplit, uZoom, uMaxSteps, uAfter;
 uniform sampler2D uRelief, uMark;
 
 const vec3 VOIDC = vec3(0.047, 0.047, 0.047);
@@ -66,6 +66,7 @@ const vec3 AMBER = vec3(0.816, 0.408, 0.125);
 const vec3 SHINE = vec3(0.973, 0.925, 0.847);
 const vec3 GREEN = vec3(0.314, 0.784, 0.439);
 const vec3 STEEL = vec3(0.470, 0.600, 0.640);
+const vec3 BLOOD = vec3(0.930, 0.035, 0.090);
 
 float h11(float p){ return fract(sin(p * 127.1) * 43758.5453123); }
 float h21(vec2  p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
@@ -230,7 +231,24 @@ float worldAt(float w, vec3 c){
   } else {
     // 05 — the mark, standing on the same ground and coming apart.
     vec2 uv = vec2((c.x - lo.x) / (hi.x - lo.x), 1.0 - (c.y - 2.0) / 34.0);
-    if (uv.y > 0.0 && uv.y < 1.0 && texture2D(uMark, uv).r > 0.5 && c.z < 8.0) m = 8.0;
+    if (uv.y > 0.0 && uv.y < 1.0 && c.z < 8.0){
+      vec4 mark = texture2D(uMark, uv);
+
+      // Coordinate fronts rewrite the mark without random per-cell work.
+      float erase = smoothstep(0.12, 0.36, uAfter);
+      float write = smoothstep(0.14, 0.40, uAfter);
+      float sign  = smoothstep(0.62, 0.94, uAfter);
+      float baseFront = uv.y + uv.x * 0.08;
+      float nameFront = uv.x + uv.y * 0.06;
+
+      if (mark.r > 0.5 && baseFront > erase * 1.08) m = 8.0;
+      if (mark.g > 0.5 && nameFront < write * 1.08 &&
+          uv.y + uv.x * 0.04 > sign * 1.04) m = 8.0;
+
+      // Blue intensity stores stroke order: eyes, smile, then sparse drips.
+      float strokeGate = mix(1.01, 0.46, sign);
+      if (mark.b > strokeGate) m = 15.0;
+    }
   }
 
   return m;
@@ -278,7 +296,8 @@ vec3 matColor(float m, vec3 c){
   if (m < 11.5) return STEEL * ((abs(uFocus - 2.0) < 0.5) ? 2.20 : 1.12);
   if (m < 12.5) return vec3(0.68, 0.56, 0.86) * ((abs(uFocus - 3.0) < 0.5) ? 2.10 : 1.04);
   if (m < 13.5) return STEEL * 0.25;
-  return STEEL * 0.76;
+  if (m < 14.5) return STEEL * 0.76;
+  return BLOOD * 1.42;
 }
 
 void main(){
@@ -442,6 +461,82 @@ const root   = document.documentElement;
 const canvas = document.getElementById("void");
 const still  = matchMedia("(prefers-reduced-motion: reduce)");
 
+/* --------------------------------------------------------- the afterimage -- */
+
+/* The easter egg uses ordinary document travel instead of synthetic overscroll.
+ * That keeps wheel, touch, keyboard, reversal, and assistive navigation native.
+ * It is deliberately not a station: the public story still ends at proof. */
+const afterElement = document.getElementById("afterimage");
+const afterState = {
+  raw: 0,
+  target: 0,
+  start: 0,
+  end: 1,
+  onchange: null,
+};
+
+const range = (a, b, x) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
+function commitAfter(raw){
+  afterState.raw = Math.min(1, Math.max(0, raw));
+  const reduced = still.matches || root.classList.contains("no-motion");
+  const p = reduced
+    ? (afterState.raw < 0.18 ? 0 : afterState.raw < 0.64 ? 0.50 : 1)
+    : afterState.raw;
+  if (Math.abs(p - afterState.target) < 0.00005) return;
+  afterState.target = p;
+
+  const face = range(0.62, 0.94, p);
+  const jane = range(0.14, 0.40, p) * (1 - 0.76 * face);
+  const fracture = range(0.03, 0.16, p) * (1 - range(0.30, 0.46, p));
+  root.style.setProperty("--after", p.toFixed(4));
+  root.style.setProperty("--after-ui", range(0.04, 0.20, p).toFixed(4));
+  root.style.setProperty("--after-break", fracture.toFixed(4));
+  root.style.setProperty("--after-jane", jane.toFixed(4));
+  root.style.setProperty("--after-face", face.toFixed(4));
+  root.style.setProperty("--after-eye-left", range(0.62, 0.70, p).toFixed(4));
+  root.style.setProperty("--after-eye-right", range(0.68, 0.76, p).toFixed(4));
+  root.style.setProperty("--after-smile", range(0.72, 0.88, p).toFixed(4));
+  root.style.setProperty("--after-drips", range(0.84, 0.94, p).toFixed(4));
+
+  const phase = p < 0.04 ? "sealed"
+    : p < 0.14 ? "pressure"
+    : p < 0.62 ? "name"
+    : p < 0.94 ? "signature"
+    : "found";
+  if (root.dataset.after !== phase) root.dataset.after = phase;
+  if (afterState.onchange) afterState.onchange();
+}
+
+function measureAfter(){
+  if (!afterElement) return;
+  const top = afterElement.getBoundingClientRect().top + window.scrollY;
+  afterState.start = top - window.innerHeight * 0.22;
+  afterState.end = Math.max(afterState.start + 1,
+    document.documentElement.scrollHeight - window.innerHeight);
+}
+
+function readAfter(){
+  if (!afterElement) return;
+  commitAfter((window.scrollY - afterState.start) /
+              (afterState.end - afterState.start));
+}
+
+root.dataset.after = "sealed";
+if (afterElement){
+  measureAfter();
+  readAfter();
+  addEventListener("scroll", readAfter, { passive: true });
+  addEventListener("resize", () => { measureAfter(); readAfter(); }, { passive: true });
+  addEventListener("load", () => { measureAfter(); readAfter(); });
+  document.querySelectorAll("details").forEach(details => {
+    details.addEventListener("toggle", () => { measureAfter(); readAfter(); });
+  });
+}
+
 let gl = null;
 try {
   gl = canvas.getContext("webgl", { antialias: false, alpha: false, depth: false,
@@ -503,7 +598,7 @@ const uni = (p, names) => {
 };
 const uS = uni(progScene, ["res","shift","camPos","camTgt","uMin","uMax","time",
                            "worldA","worldB","morph","phase","cut","focus",
-                           "inflate","split","zoom","maxSteps","relief","mark"]);
+                           "inflate","split","zoom","maxSteps","after","relief","mark"]);
 const uA = uni(progAscii, ["scene","atlas","res","grid","mouse","cell","count",
                            "time","boot","lens","lensR","motion","warpK","reveal"]);
 
@@ -589,13 +684,56 @@ function buildMark(){
   const ctx = c.getContext("2d");
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = "#fff";
+  ctx.globalCompositeOperation = "lighter";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
+
+  // One allocation, one upload, one sample: normal mark / JANE / signature.
+  ctx.fillStyle = "#f00";
   ctx.font = '600 38px ui-monospace,"DejaVu Sans Mono",Menlo,Consolas,monospace';
   ctx.fillText("IBVOID", W / 2, 58);
   ctx.font = '800 94px ui-monospace,"DejaVu Sans Mono",Menlo,Consolas,monospace';
   ctx.fillText("AF26C13", W / 2, 166);
+
+  ctx.fillStyle = "#0f0";
+  ctx.font = '800 162px ui-monospace,"DejaVu Sans Mono",Menlo,Consolas,monospace';
+  ctx.fillText("JANE", W / 2, 142);
+
+  ctx.fillStyle = "transparent";
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  const stroke = (colour, width, draw) => {
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    draw(ctx);
+    ctx.stroke();
+  };
+
+  // Blue intensity is the draw order. The control points are an original,
+  // deliberately uneven homage rather than a traced or downloaded mark.
+  stroke("#0000ff", 15, p => {
+    p.moveTo(238, 49);
+    p.bezierCurveTo(220, 76, 223, 111, 241, 132);
+  });
+  stroke("#0000dc", 13, p => {
+    p.moveTo(522, 45);
+    p.bezierCurveTo(540, 75, 536, 108, 516, 128);
+  });
+  stroke("#0000b8", 16, p => {
+    p.moveTo(126, 146);
+    p.bezierCurveTo(245, 236, 491, 241, 642, 137);
+  });
+  stroke("#000092", 8, p => {
+    p.moveTo(241, 130);
+    p.bezierCurveTo(238, 149, 245, 160, 239, 178);
+    p.moveTo(517, 127);
+    p.bezierCurveTo(522, 145, 515, 155, 520, 171);
+    p.moveTo(574, 180);
+    p.bezierCurveTo(578, 196, 573, 205, 576, 219);
+  });
+  ctx.globalCompositeOperation = "source-over";
 
   const t = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, t);
@@ -753,6 +891,7 @@ function blendCam(a, b, k){
 
 const S = {
   act: 0, actTarget: 0,
+  after: afterState.target,
   mouse: [0.5, 0.5], mouseSmooth: [0.5, 0.5],
   lens: 0, lensWant: 0,
   motion: still.matches ? 0 : 1,
@@ -823,7 +962,9 @@ function markLensUsed(){
 }
 
 addEventListener("pointerdown", event => {
-  if (event.button !== 0) return;
+  const target = event.target instanceof Element ? event.target : null;
+  if (event.button !== 0 || afterState.target > 0.001 ||
+      (target && target.closest("a,button,summary,input,textarea,select,[contenteditable]"))) return;
   S.lensWant = 1;
   markLensUsed();
   invalidate();
@@ -851,6 +992,7 @@ function setMotion(on){
   S.motion = on ? 1 : 0;
   root.classList.toggle("no-motion", !on);
   if (btnMotion) btnMotion.setAttribute("aria-pressed", String(on));
+  readAfter();
   invalidate();
 }
 
@@ -871,8 +1013,8 @@ setMotion(!still.matches);
 
 addEventListener("keydown", e => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
-  const tag = (e.target && e.target.tagName) || "";
-  if (tag === "INPUT" || tag === "TEXTAREA") return;
+  const target = e.target instanceof Element ? e.target : null;
+  if (target && target.closest("a,button,summary,input,textarea,select,[contenteditable]")) return;
   if (e.key === "l" || e.key === "L"){ setLens(!lensLatched); }
   if (e.key === "m" || e.key === "M"){ setMotion(!S.motion); }
 });
@@ -906,6 +1048,7 @@ function failGL(error){
 function invalidate(){
   if (!raf && pageVisible && !frameFailed) raf = requestAnimationFrame(draw);
 }
+afterState.onchange = invalidate;
 
 function draw(now){
   raf = 0;
@@ -921,6 +1064,7 @@ function draw(now){
 
     S.boot = reduced ? 1 : Math.min(1, time / 2.8);
     S.act = reduced ? S.actTarget : damp(S.act, S.actTarget, 7.2, dt);
+    S.after = reduced ? afterState.target : damp(S.after, afterState.target, 8.4, dt);
     S.mouseSmooth[0] = reduced ? S.mouse[0] : damp(S.mouseSmooth[0], S.mouse[0], 8.0, dt);
     S.mouseSmooth[1] = reduced ? S.mouse[1] : damp(S.mouseSmooth[1], S.mouse[1], 8.0, dt);
     S.lens = damp(S.lens, S.lensWant, 12.0, dt);
@@ -951,7 +1095,18 @@ function draw(now){
       : blendCam(camera(wa, Math.min(1, localA), mx, my),
                  camera(wb, Math.max(0, S.act - wb), mx, my),
                  smooth(0, 1, morph));
+    if (wi === 5 && S.after > 0.001){
+      const breach = smooth(0.04, 0.92, S.after);
+      cam.pos[1] += breach * 1.8;
+      cam.pos[2] -= breach * 12;
+      cam.tgt[1] -= breach * 1.2;
+      cam.shift[0] *= 1 - breach * 0.72;
+      cam.zoom += breach * 0.10;
+    }
     if (innerWidth < 900) cam.shift = [0, 0.10];
+
+    const fracture = smooth(0.03, 0.16, S.after) *
+                     (1 - smooth(0.30, 0.46, S.after));
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.viewport(0, 0, fboW, fboH);
@@ -967,12 +1122,13 @@ function draw(now){
     gl.uniform1f(uS.worldB, wb);
     gl.uniform1f(uS.morph, morph);
     gl.uniform1f(uS.phase, reduced ? 0 : time * 2.2);
-    gl.uniform1f(uS.cut, 0);
+    gl.uniform1f(uS.cut, wi === 5 ? fracture * 0.44 : 0);
     gl.uniform1f(uS.focus, S.focus);
     gl.uniform1f(uS.inflate, wi === 0 ? (reduced ? 1 : smooth(0.08, 0.94, S.boot)) : 1);
     gl.uniform1f(uS.split, splitProgress);
     gl.uniform1f(uS.zoom, cam.zoom);
     gl.uniform1f(uS.maxSteps, maxSteps);
+    gl.uniform1f(uS.after, S.after);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texRel);
     gl.activeTexture(gl.TEXTURE1);
@@ -997,7 +1153,7 @@ function draw(now){
     gl.uniform1f(uA.count, atlas.count);
     gl.uniform1f(uA.time, reduced ? 0 : time);
     gl.uniform1f(uA.boot, S.boot);
-    gl.uniform1f(uA.lens, S.lens);
+    gl.uniform1f(uA.lens, S.lens * (1 - smooth(0.08, 0.24, S.after)));
     gl.uniform1f(uA.lensR, Math.min(canvas.width, canvas.height) * 0.19);
     gl.uniform1f(uA.motion, S.motion);
     gl.uniform1f(uA.warpK, reduced ? 0 : 0.50);
@@ -1066,6 +1222,7 @@ function draw(now){
     }
 
     const unsettled = Math.abs(S.act - S.actTarget) > 0.001 ||
+                      Math.abs(S.after - afterState.target) > 0.001 ||
                       Math.abs(S.mouseSmooth[0] - S.mouse[0]) > 0.001 ||
                       Math.abs(S.mouseSmooth[1] - S.mouse[1]) > 0.001 ||
                       Math.abs(S.lens - S.lensWant) > 0.001 ||
