@@ -1200,6 +1200,10 @@ details p {
 }
 
 .ritual-cup {
+  --cup-yaw: 0deg;
+  --cup-pitch: 0deg;
+  --cup-observe: 0;
+  --steam-bias: 0px;
   position: relative;
   display: grid;
   min-width: 0;
@@ -1211,7 +1215,8 @@ details p {
   cursor: pointer;
   filter: drop-shadow(0 28px 34px rgba(0, 0, 0, 0.46));
   justify-self: end;
-  width: min(17vw, 220px);
+  width: min(18vw, 230px);
+  perspective: 760px;
 }
 
 .ritual-cup::before {
@@ -1242,44 +1247,95 @@ details p {
   display: block;
   width: 100%;
   overflow: visible;
-  transform: rotate(-1.2deg);
+  filter: brightness(calc(0.96 + var(--cup-observe) * 0.10));
+  transform: rotateX(var(--cup-pitch)) rotateY(var(--cup-yaw)) rotateZ(-1.1deg);
+  transform-origin: 48% 69%;
+  transform-style: preserve-3d;
+  transition: transform 420ms var(--ease-out), filter 360ms ease, opacity 260ms ease;
 }
 
 .gl-ready .ritual-cup svg {
-  opacity: 0.08;
-  mix-blend-mode: screen;
+  opacity: 0.96;
 }
 
 .tea-shadow { fill: rgba(0, 0, 0, 0.46); }
-.tea-saucer { fill: url("#porcelain"); opacity: 0.78; }
-.tea-saucer-rim { fill: rgba(31, 86, 87, 0.38); }
+.tea-saucer { fill: url("#porcelain-edge"); opacity: 0.94; }
+.tea-saucer-well { fill: rgba(7, 68, 73, 0.78); }
+.tea-saucer-groove {
+  fill: none;
+  stroke: rgba(167, 245, 235, 0.34);
+  stroke-width: 3;
+}
+.tea-saucer-groove.is-inner {
+  stroke: rgba(3, 52, 60, 0.52);
+  stroke-width: 2;
+}
 .tea-handle,
 .tea-cup-body { fill: url("#porcelain"); }
-.tea-rim { fill: #d8fbf4; }
+.tea-handle {
+  stroke: rgba(185, 246, 238, 0.24);
+  stroke-width: 2;
+}
+.tea-foot { fill: #0a5158; opacity: 0.90; }
+.tea-rim { fill: #b8f3eb; }
+.tea-rim-well { fill: #0b4b52; }
 .tea-liquid { fill: url("#tea"); }
+.tea-liquid-glint {
+  fill: none;
+  stroke: rgba(255, 232, 189, 0.60);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
 .tea-glint {
   fill: none;
-  stroke: rgba(233, 255, 251, 0.56);
-  stroke-width: 8;
+  stroke: rgba(224, 255, 250, 0.55);
+  stroke-width: 7;
   stroke-linecap: round;
+}
+.tea-band {
+  fill: none;
+  stroke: rgba(3, 67, 75, 0.31);
+  stroke-width: 3;
+}
+.tea-band.is-lower { stroke-width: 2; }
+.tea-repair {
+  fill: none;
+  stroke: rgba(2, 43, 49, 0.46);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tea-thread {
+  fill: none;
+  stroke: rgba(232, 216, 183, 0.58);
+  stroke-width: 1.6;
+}
+.tea-tag {
+  fill: #d7c9aa;
+  stroke: rgba(73, 48, 33, 0.62);
+  stroke-width: 1.3;
 }
 
 .tea-steam path {
   fill: none;
   stroke: rgba(221, 247, 241, 0.46);
-  stroke-width: 5;
+  stroke-width: 4;
   stroke-linecap: round;
-  stroke-dasharray: 8 11;
-  animation: tea-steam 3.8s linear infinite;
+  stroke-dasharray: 10 13;
+  transform: translateX(var(--steam-bias));
+  animation: tea-steam 4.8s linear infinite;
+  transition: transform 420ms var(--ease-out);
 }
 
-.tea-steam path:nth-child(2) { animation-delay: -1.3s; }
-.tea-steam path:nth-child(3) { animation-delay: -2.4s; }
+.tea-steam path:nth-child(2) {
+  animation-duration: 6.3s;
+  animation-delay: -2.1s;
+}
 
 @keyframes tea-steam {
-  0% { stroke-dashoffset: 0; opacity: 0.18; transform: translateY(5px); }
+  0% { stroke-dashoffset: 0; opacity: 0.18; }
   45% { opacity: 0.72; }
-  100% { stroke-dashoffset: -38; opacity: 0.08; transform: translateY(-5px); }
+  100% { stroke-dashoffset: -46; opacity: 0.08; }
 }
 
 .ritual-cup-label {
@@ -1424,11 +1480,11 @@ details p {
   overflow: hidden;
   opacity: var(--after-wall);
   background:
-    linear-gradient(91deg, transparent 0 61%, rgba(55, 46, 38, 0.10) 61.4%, transparent 62.1%),
-    radial-gradient(ellipse at 28% 20%, rgba(224, 217, 205, 0.16), transparent 43%),
-    radial-gradient(ellipse at 78% 72%, rgba(67, 54, 44, 0.20), transparent 52%),
-    linear-gradient(180deg, #958c80, #80776d);
-  box-shadow: inset 0 0 150px rgba(39, 28, 21, 0.30);
+    linear-gradient(91deg, transparent 0 73%, rgba(55, 46, 38, 0.055) 73.25%, transparent 73.8%),
+    radial-gradient(ellipse at 29% 18%, rgba(242, 236, 224, 0.24), transparent 45%),
+    radial-gradient(ellipse at 78% 72%, rgba(68, 54, 43, 0.19), transparent 55%),
+    linear-gradient(180deg, #b9b0a3, #8d8479);
+  box-shadow: inset 0 0 170px rgba(39, 28, 21, 0.26);
   transform: scale(calc(1.015 - var(--after-wall) * 0.015));
   transform-origin: center;
 }
@@ -1439,8 +1495,9 @@ details p {
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(90deg, transparent 17%, rgba(46, 34, 27, 0.055) 18%, transparent 18.8%, transparent 83%, rgba(54, 41, 32, 0.045) 84%, transparent 85%),
-    linear-gradient(112deg, rgba(255, 255, 255, 0.075), transparent 43%, rgba(51, 37, 28, 0.12));
+    linear-gradient(90deg, transparent 14%, rgba(46, 34, 27, 0.038) 15%, transparent 16.2%, transparent 86%, rgba(54, 41, 32, 0.035) 87%, transparent 88%),
+    repeating-linear-gradient(8deg, transparent 0 42px, rgba(59, 43, 33, 0.018) 43px 44px),
+    linear-gradient(112deg, rgba(255, 255, 255, 0.095), transparent 43%, rgba(51, 37, 28, 0.12));
   mix-blend-mode: multiply;
 }
 
@@ -1449,58 +1506,43 @@ details p {
   width: 100%;
   height: 100%;
   overflow: visible;
-  filter: drop-shadow(0 1px 1px rgba(50, 3, 12, 0.20));
+  filter: none;
 }
 
-.afterimage-signature path {
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  /* A slight overrun closes the final sub-pixel of the normalized path. At
-     exactly 1 some SVG rasterizers leave a visible seam where the circle's
-     start and end meet. */
+.signature-ink,
+.signature-bleed {
+  mix-blend-mode: multiply;
+}
+
+.signature-paint {
+  fill: #8f0504;
+}
+
+.signature-bleed {
+  opacity: 0.15;
+  filter: blur(0.7px);
+}
+
+.signature-bleed .signature-paint { fill: #590000; }
+
+.signature-reveal {
   stroke-dasharray: 1.025 1;
-  vector-effect: non-scaling-stroke;
+  stroke-dashoffset: 1;
+  opacity: 0;
 }
 
-.signature-shadow path {
-  stroke: rgba(67, 3, 17, 0.18);
-  stroke-width: 15;
-  filter: blur(2px);
-}
-.signature-shadow { opacity: var(--after-circle); }
-
-.signature-ink path {
-  stroke: #7a0a21;
-  stroke-width: 7;
-}
-
-.signature-circle path {
-  /* All three lanes travel clockwise from the same broken upper-left start,
-     so the reveal reads as one hand gesture rather than three icons fading in. */
-  stroke-dasharray: 1.025 1;
-  stroke-dashoffset: calc(1 - var(--after-circle));
-  opacity: var(--after-circle);
-}
-
-.signature-circle path:first-child { stroke: #8d0d29; stroke-width: 11px; }
-.signature-circle path:nth-child(2) { stroke: rgba(101, 8, 26, 0.62); stroke-width: 6px; }
-.signature-circle path:nth-child(3) { stroke: rgba(154, 18, 48, 0.74); stroke-width: 4px; }
-.signature-eye-left { stroke-dashoffset: calc(1 - var(--after-eye-left)); }
-.signature-eye-right { stroke-dashoffset: calc(1 - var(--after-eye-right)); }
-.signature-eye-left,
-.signature-eye-right { stroke-width: 8.5px !important; }
-.signature-smile { stroke-width: 8.5 !important; stroke-dashoffset: calc(1 - var(--after-smile)); }
-.signature-smile-faint { stroke: rgba(101, 8, 26, 0.58) !important; stroke-width: 3.5px !important; }
-.signature-smile-fray { stroke: rgba(154, 18, 48, 0.68) !important; stroke-width: 2.5px !important; }
-.signature-drip { stroke-width: 3.5px !important; stroke-dashoffset: calc(1 - var(--after-drips)); }
-.signature-drip.is-heavy { stroke-width: 5px !important; }
-.signature-drip.is-thin { stroke-width: 2.2px !important; }
-
-.signature-eye-left { opacity: var(--after-eye-left); }
-.signature-eye-right { opacity: var(--after-eye-right); }
-.signature-smile { opacity: var(--after-smile); }
-.signature-drip { opacity: var(--after-drips); }
+.signature-reveal.signature-circle { stroke-dashoffset: calc(1 - var(--after-circle)); opacity: min(1, calc(var(--after-circle) * 100)); }
+.signature-reveal.signature-accent { stroke-dashoffset: calc(1 - var(--after-accent)); opacity: min(1, calc(var(--after-accent) * 100)); }
+.signature-reveal.signature-ring-drip { stroke-dashoffset: calc(1 - var(--after-ring-drip)); opacity: min(1, calc(var(--after-ring-drip) * 100)); }
+.signature-reveal.signature-eye-right { stroke-dashoffset: calc(1 - var(--after-eye-right)); opacity: min(1, calc(var(--after-eye-right) * 100)); }
+.signature-reveal.signature-eye-right-drip { stroke-dashoffset: calc(1 - var(--after-eye-right-drip)); opacity: min(1, calc(var(--after-eye-right-drip) * 100)); }
+.signature-reveal.signature-eye-left { stroke-dashoffset: calc(1 - var(--after-eye-left)); opacity: min(1, calc(var(--after-eye-left) * 100)); }
+.signature-reveal.signature-eye-left-drip { stroke-dashoffset: calc(1 - var(--after-eye-left-drip)); opacity: min(1, calc(var(--after-eye-left-drip) * 100)); }
+.signature-reveal.signature-smile { stroke-dashoffset: calc(1 - var(--after-smile)); opacity: min(1, calc(var(--after-smile) * 100)); }
+.signature-reveal.signature-mouth-drips { stroke-dashoffset: calc(1 - var(--after-mouth-drips)); opacity: min(1, calc(var(--after-mouth-drips) * 100)); }
+.signature-reveal.signature-mouth-drips-mid { stroke-dashoffset: calc(1 - var(--after-mouth-drips-mid)); opacity: min(1, calc(var(--after-mouth-drips-mid) * 100)); }
+.signature-reveal.signature-mouth-drips-late { stroke-dashoffset: calc(1 - var(--after-mouth-drips-late)); opacity: min(1, calc(var(--after-mouth-drips-late) * 100)); }
+.signature-reveal.signature-last-drip { stroke-dashoffset: calc(1 - var(--after-last-drip)); opacity: min(1, calc(var(--after-last-drip) * 100)); }
 
 .afterimage-return {
   position: absolute;
@@ -1839,13 +1881,13 @@ html:not([data-ritual="sealed"]) .topbar:not(:focus-within) {
     bottom: max(96px, calc(env(safe-area-inset-bottom) + 82px));
     left: 50%;
     width: min(calc(100vw - 42px), 360px);
-    padding: 17px 19px 19px;
-    border-top: 1px solid rgba(183, 240, 232, 0.26);
+    padding: 22px 18px 18px;
+    border-top: 0;
     border-left: 0;
     background:
-      linear-gradient(90deg, rgba(76, 174, 167, 0.08), transparent 58%),
-      rgba(7, 10, 9, 0.92);
-    box-shadow: 0 18px 54px rgba(0, 0, 0, 0.44);
+      radial-gradient(80% 120% at 0 0, rgba(76, 174, 167, 0.09), transparent 56%),
+      linear-gradient(180deg, transparent, rgba(7, 10, 9, 0.72) 30%, rgba(7, 10, 9, 0.86));
+    box-shadow: none;
     text-align: left;
     transform: translateX(-50%);
     pointer-events: auto;
@@ -1855,11 +1897,22 @@ html:not([data-ritual="sealed"]) .topbar:not(:focus-within) {
     content: "";
     position: absolute;
     top: -1px;
-    right: 0;
-    width: 38px;
+    right: auto;
+    left: 0;
+    width: 58px;
     height: 1px;
     background: var(--aqua-soft);
     box-shadow: 0 0 14px rgba(116, 216, 206, 0.42);
+  }
+
+  .ritual-copy::before {
+    content: "";
+    position: absolute;
+    top: -1px;
+    left: 0;
+    width: 1px;
+    height: 46px;
+    background: linear-gradient(rgba(183, 240, 232, 0.42), transparent);
   }
 
   .ritual-eyebrow { margin-bottom: 12px; }

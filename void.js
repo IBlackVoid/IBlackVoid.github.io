@@ -57,7 +57,8 @@ precision highp float;
 uniform vec2      uRes, uShift;
 uniform vec3      uCamPos, uCamTgt, uUMin, uUMax;
 uniform float     uTime, uWorldA, uWorldB, uMorph, uPhase, uCut, uFocus,
-                  uInflate, uSplit, uZoom, uMaxSteps, uAfter, uRitual;
+                  uInflate, uSplit, uZoom, uMaxSteps, uAfter, uRitual,
+                  uObserve;
 uniform sampler2D uRelief, uMark;
 
 const vec3 VOIDC = vec3(0.047, 0.047, 0.047);
@@ -66,9 +67,9 @@ const vec3 AMBER = vec3(0.816, 0.408, 0.125);
 const vec3 SHINE = vec3(0.973, 0.925, 0.847);
 const vec3 GREEN = vec3(0.314, 0.784, 0.439);
 const vec3 STEEL = vec3(0.470, 0.600, 0.640);
-const vec3 BLOOD = vec3(0.930, 0.035, 0.090);
-const vec3 TEAL  = vec3(0.250, 0.590, 0.575);
-const vec3 TEA   = vec3(0.720, 0.360, 0.120);
+const vec3 BLOOD = vec3(0.580, 0.025, 0.020);
+const vec3 TEAL  = vec3(0.100, 0.680, 0.700);
+const vec3 TEA   = vec3(0.820, 0.390, 0.090);
 
 float h11(float p){ return fract(sin(p * 127.1) * 43758.5453123); }
 float h21(vec2  p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
@@ -233,39 +234,100 @@ float worldAt(float w, vec3 c){
   } else {
     // 05 — public proof, a discovered tea ritual, and the final signature.
     float ritual = smoothstep(0.02, 0.98, uRitual);
-    float cupLife = ritual * (1.0 - smoothstep(0.08, 0.30, uAfter));
+    if (ritual > 0.001 && uAfter < 0.54){
+      // Jane's low turquoise cup is authored in one local coordinate system.
+      // Keeping every dimension in q is essential: mixing q.xz with world y
+      // was what turned the previous vessel into a swollen cylinder.
+      float lift = smoothstep(0.025, 0.15, uAfter);
+      vec3 q = c - vec3(-14.0 - 2.0 * lift, 1.0 + 28.0 * lift, 0.0);
+      float y = q.y;
+      float r2 = dot(q.xz, q.xz);
+      float cupMat = 0.0;
 
-    if (h31(c * 1.31 + 19.0) < cupLife){
-      // The clue belongs inside the field rather than sitting over it as a
-      // large illustration. Keep it low-left and human-scale in world space.
-      vec3 q = (c - vec3(-13.0, 0.0, 0.0)) / 0.72;
-      float r = length(q.xz);
+      float t = clamp((y - 3.1) / 13.4, 0.0, 1.0);
+      float outer = mix(6.2, 8.6, smoothstep(0.0, 1.0, t))
+                  + 0.55 * sin(3.14159 * t);
+      float inner = outer - 1.05;
+      if (y >= 3.1 && y < 16.5 &&
+          r2 < outer * outer && r2 > inner * inner) cupMat = 16.0;
+      if (y >= 2.8 && y < 4.2 && r2 < 42.25) cupMat = 16.0;
 
-      // A shallow turquoise saucer, tapered porcelain shell, amber surface,
-      // and a vertical handle. Separate material ids let the tea darken before
-      // the cup yields to the final wall.
-      float saucer = length(vec2(q.x / 21.0, q.z / 14.0));
-      if (c.y >= 2.0 && c.y < 4.0 && saucer < 1.0) m = 16.0;
+      // Two shallow ridges catch light without turning the bowl into a stack
+      // of rings. They echo the saucer and the period cup's ceramic tooling.
+      if (cupMat > 15.5 &&
+          (abs(y - 7.0) < 0.34 || abs(y - 12.8) < 0.28)) cupMat = 19.0;
 
-      float bodyR = 9.5 + (c.y - 5.0) * 0.22;
-      if (c.y >= 5.0 && c.y < 17.0 && abs(r - bodyR) < 1.35) m = 16.0;
-      if (c.y >= 4.0 && c.y < 6.0 && r < 10.2) m = 16.0;
-      if (c.y >= 17.0 && c.y < 19.0 && abs(r - 12.3) < 1.45) m = 16.0;
-      if (c.y >= 17.0 && c.y < 18.0 && r < 10.9) m = 17.0;
+      if (y >= 15.9 && y < 17.4 && r2 < 86.49 && r2 > 57.00)
+        cupMat = 20.0;
+      if (y >= 16.15 && y < 16.75 && r2 < 58.52) cupMat = 17.0;
 
-      float handle = length(vec2(q.x - 15.0, q.y - 11.0));
-      if (q.x > 9.0 && abs(q.z) < 2.0 && abs(handle - 6.4) < 1.35) m = 16.0;
+      // The ring handle and its two bridges are separate tests so the hole
+      // remains open at character resolution without detaching from the bowl.
+      vec2 hp = vec2((q.x - 10.1) / 4.75, (y - 10.1) / 5.25);
+      float hd = dot(hp, hp);
+      if (q.x > 7.2 && abs(q.z) < 1.25 && hd > 0.56 && hd < 1.30)
+        cupMat = 16.0;
+      if (q.x >= 6.8 && q.x < 10.2 && abs(q.z) < 1.35 &&
+          ((y > 6.4 && y < 8.1) || (y > 12.5 && y < 14.2)))
+        cupMat = 16.0;
 
-      if (c.y >= 20.0 && c.y < 35.0){
-        float sway = sin(c.y * 0.43 + uTime * 0.34);
-        float d0 = length(vec2(q.x + 5.2 - sway * 1.1,
-                               q.z - sin(c.y * 0.31) * 0.8));
-        float d1 = length(vec2(q.x - sin(c.y * 0.37 + 1.7) * 1.2,
-                               q.z + 0.8 - cos(c.y * 0.29) * 0.8));
-        float d2 = length(vec2(q.x - 5.2 - sway * 0.9,
-                               q.z - sin(c.y * 0.34 + 2.4) * 0.7));
-        if (min(d0, min(d1, d2)) < 0.92 && mod(c.y, 3.0) < 2.0) m = 18.0;
+      float bodyBreak = smoothstep(0.105, 0.16, uAfter);
+      if (cupMat > 0.0 &&
+          (bodyBreak < 0.001 || h31(c * 1.31 + 19.0) > bodyBreak))
+        m = cupMat;
+
+      // The saucer stays behind when the cup lifts. A circular object in world
+      // space becomes the correct ellipse through perspective; drawing an
+      // ellipse into the geometry was another source of the old icon look.
+      vec3 sq = c - vec3(-14.0, 1.0, 0.0);
+      float sr = length(sq.xz);
+      float dishY = 0.8 + 1.35 * pow(clamp(sr / 15.9, 0.0, 1.0), 2.0);
+      float saucerMat = 0.0;
+      if (sr < 15.9 && sq.y >= dishY && sq.y < dishY + 1.15)
+        saucerMat = 16.0;
+      if (saucerMat > 0.0 &&
+          (abs(sr - 10.8) < 0.48 || abs(sr - 13.6) < 0.42))
+        saucerMat = 19.0;
+      float saucerBreak = smoothstep(0.22, 0.34, uAfter);
+      if (saucerMat > 0.0 &&
+          (saucerBreak < 0.001 || h31(c * 0.77 + 31.0) > saucerBreak))
+        m = saucerMat;
+
+      // Two unequal steam threads. Camera parallax supplies the restrained
+      // pointer bend, and the accepted-letter scalar advances their glint.
+      float steamLife = 1.0 - smoothstep(0.02, 0.075, uAfter);
+      if (steamLife > 0.001 && y >= 18.0 && y < 35.0){
+        float bend = clamp((uCamPos.x - 18.0) / 5.0, -1.0, 1.0);
+        float rise = smoothstep(18.0, 35.0, y);
+        float d0 = length(vec2(
+          q.x + 3.1 - sin(y * 0.31 + uTime * 0.31) * 1.15 - bend * rise * 2.2,
+          q.z - cos(y * 0.23 + 0.8) * 0.48));
+        float d1 = length(vec2(
+          q.x - 2.4 - sin(y * 0.27 + uTime * 0.24 + 2.1) * 0.92 - bend * rise * 1.7,
+          q.z + 0.7 - cos(y * 0.19 + 1.6) * 0.42));
+        if (min(d0, d1) < 0.86 && mod(y + uObserve * 2.0, 3.0) < 2.0)
+          m = 18.0;
       }
+    }
+
+    // The tell is the ring: the saucer rotates toward the camera, expands,
+    // and loses its ceramic colour before the irregular painted gesture takes
+    // over. One geometry transition connects the calm ritual to the threat.
+    float ringIn = smoothstep(0.20, 0.28, uAfter);
+    float ringOut = 1.0 - smoothstep(0.48, 0.56, uAfter);
+    float ringLife = ritual * ringIn * ringOut;
+    if (ringLife > 0.001){
+      float turn = smoothstep(0.22, 0.48, uAfter);
+      vec3 rq = c - vec3(mix(-14.0, 0.0, turn), 1.0, 0.0);
+      float angle = turn * 1.5707963;
+      float ca = cos(angle), sa = sin(angle);
+      float normal = ca * rq.y + sa * rq.z;
+      float radial = -sa * rq.y + ca * rq.z;
+      float rr = length(vec2(rq.x, radial));
+      float radius = mix(13.6, 30.0, smoothstep(0.22, 0.52, uAfter));
+      float inkWidth = mix(0.18, mix(0.65, 1.35, turn), ringIn) * ringOut;
+      if (abs(rr - radius) < max(0.10, inkWidth) && abs(normal) < 1.15)
+        m = 16.0;
     }
 
     vec2 uv = vec2((c.x - lo.x) / (hi.x - lo.x), 1.0 - (c.y - 2.0) / 34.0);
@@ -276,13 +338,13 @@ float worldAt(float w, vec3 c){
 
       float write = smoothstep(0.28, 0.42, uAfter);
       float nameErase = smoothstep(0.46, 0.58, uAfter);
-      float sign  = smoothstep(0.70, 0.96, uAfter);
+      float sign  = smoothstep(0.62, 0.96, uAfter);
       float nameFront = uv.x + uv.y * 0.06;
       if (mark.g > 0.5 && nameFront < write * 1.08 &&
           uv.y + uv.x * 0.04 > nameErase * 1.04) m = 8.0;
 
-      // Blue intensity is the construction order: enclosing circle, short
-      // eyes, the restrained smile, then descending paint.
+      // Blue intensity is the construction order shared with the plaster SVG:
+      // one pressure-loaded ring, the two smears, the heavy mouth, then gravity.
       float strokeGate = mix(1.01, 0.46, sign);
       if (mark.b > strokeGate) m = 15.0;
     }
@@ -334,11 +396,20 @@ vec3 matColor(float m, vec3 c){
   if (m < 12.5) return vec3(0.68, 0.56, 0.86) * ((abs(uFocus - 3.0) < 0.5) ? 2.10 : 1.04);
   if (m < 13.5) return STEEL * 0.25;
   if (m < 14.5) return STEEL * 0.76;
-  if (m < 15.5) return BLOOD * 1.42;
-  if (m < 16.5) return TEAL * (1.18 + 0.22 * h31(c * 0.47));
+  if (m < 15.5) return BLOOD * 1.64;
+  if (m < 16.5) return mix(
+    TEAL * (1.26 + 0.16 * h31(c * 0.47) + 0.10 * uObserve),
+    BLOOD * 1.58,
+    smoothstep(0.25, 0.39, uAfter));
   if (m < 17.5) return mix(TEA * 1.32, BLOOD * 0.92,
-                           smoothstep(0.10, 0.34, uAfter));
-  return SHINE * (0.58 + 0.22 * h31(c * 0.31));
+                           smoothstep(0.10, 0.34, uAfter)) *
+                           (1.0 + 0.08 * uObserve);
+  if (m < 18.5) return SHINE * (0.58 + 0.22 * h31(c * 0.31));
+  if (m < 19.5) return mix(
+    vec3(0.035, 0.320, 0.360) * 1.36,
+    BLOOD * 1.36,
+    smoothstep(0.25, 0.39, uAfter));
+  return vec3(0.480, 0.940, 0.890) * 1.30;
 }
 
 void main(){
@@ -526,8 +597,116 @@ const afterSignature = document.getElementById("afterimage-signature");
 const afterReturn = document.querySelector(".afterimage-return");
 const ANSWER = [0x4a, 0x41, 0x4e, 0x45];
 
+/* One source of truth feeds both the plaster SVG and the blue channel of the
+ * voxel mask. The silhouettes carry pressure; their centerlines only reveal
+ * them. That separation is why the mark can write like a hand gesture without
+ * collapsing back into a constant-width vector icon. */
+const SIGNATURE = Object.freeze({
+  width: 500,
+  height: 570,
+  parts: Object.freeze([
+    {
+      id: "ring",
+      phase: "circle",
+      tone: 255,
+      revealWidth: 66,
+      d: "M148 8 C205 2 279 28 336 67 C391 105 418 166 407 233 C397 299 359 351 304 377 C239 406 166 382 117 333 C72 288 78 216 102 160 C125 108 165 81 202 65 C213 60 221 64 223 70 C226 77 221 83 211 87 L204 90 C169 104 140 134 123 177 C104 225 108 274 143 310 C182 350 241 367 295 344 C345 322 378 279 385 226 C391 173 369 125 321 91 C275 59 210 35 162 36 C149 36 138 29 138 21 C138 14 142 10 148 8 Z",
+      reveal: "M150 21 C208 17 283 43 329 77 C379 113 402 167 396 228 C389 285 355 334 300 359 C242 385 176 365 129 323 C88 285 91 221 113 167 C133 121 170 94 208 77",
+    },
+    {
+      id: "top-trail",
+      phase: "accent",
+      tone: 245,
+      revealWidth: 13,
+      d: "M203 0 C240 6 286 24 323 49 C329 53 331 57 328 60 C325 63 319 60 313 56 C278 34 238 19 201 8 C195 6 197 1 203 0 Z",
+      reveal: "M202 4 C244 11 286 28 322 54",
+    },
+    {
+      id: "ring-drain",
+      phase: "ring-drip",
+      tone: 228,
+      revealWidth: 10,
+      d: "M303 370 C310 374 311 387 310 404 L311 466 C312 510 310 548 308 568 C307 572 303 571 302 566 C300 545 304 510 303 469 L302 407 C301 389 298 377 303 370 Z",
+      reveal: "M305 373 C307 419 305 489 306 567",
+    },
+    {
+      id: "right-eye",
+      phase: "eye-right",
+      tone: 214,
+      revealWidth: 43,
+      d: "M266 173 L299 157 C308 159 316 165 324 172 L337 186 C339 192 335 199 331 201 C325 198 319 190 310 187 C300 183 292 184 284 190 C277 195 273 204 268 207 C264 202 263 181 266 173 Z",
+      reveal: "M268 187 L300 167 C312 169 322 177 333 190",
+    },
+    {
+      id: "left-eye",
+      phase: "eye-left",
+      tone: 205,
+      revealWidth: 40,
+      d: "M159 188 L173 177 C181 174 190 176 198 181 L204 184 L212 179 C217 178 221 181 222 185 C222 190 219 196 215 200 C209 204 203 200 198 201 C190 202 185 211 175 212 C167 211 160 204 157 197 C156 193 157 190 159 188 Z",
+      reveal: "M161 194 L176 181 C185 180 193 187 201 192 L217 187",
+    },
+    {
+      id: "right-eye-drip",
+      phase: "eye-right-drip",
+      tone: 184,
+      revealWidth: 9,
+      d: "M313 184 C318 188 320 197 319 209 L320 258 C320 270 318 279 315 279 C311 278 312 265 312 255 L311 212 C310 200 308 191 313 184 Z",
+      reveal: "M314 188 C316 217 315 249 316 278",
+    },
+    {
+      id: "left-eye-drip",
+      phase: "eye-left-drip",
+      tone: 174,
+      revealWidth: 10,
+      d: "M160 198 C166 202 168 211 167 224 L166 286 C166 307 165 323 162 325 C158 322 159 305 159 287 L158 229 C157 216 155 205 160 198 Z",
+      reveal: "M161 201 C163 239 160 286 162 324",
+    },
+    {
+      id: "mouth",
+      phase: "smile",
+      tone: 160,
+      revealWidth: 47,
+      d: "M180 273 C190 273 200 286 214 292 C239 303 276 300 301 282 L312 271 C317 267 323 275 321 281 C318 289 307 294 300 300 C275 318 239 323 210 312 C193 306 181 298 177 287 C174 280 175 275 180 273 Z",
+      reveal: "M181 282 C215 310 269 316 316 279",
+    },
+    {
+      id: "mouth-drip-left",
+      phase: "mouth-drips",
+      tone: 148,
+      revealWidth: 9,
+      d: "M192 297 C198 301 199 310 198 322 L199 344 C199 352 196 357 193 352 C190 347 192 336 191 326 C190 314 188 303 192 297 Z",
+      reveal: "M194 301 C195 320 193 338 195 353",
+    },
+    {
+      id: "mouth-drip-mid",
+      phase: "mouth-drips-mid",
+      tone: 140,
+      revealWidth: 8,
+      d: "M202 304 C207 307 207 316 206 325 L207 340 C206 347 203 348 201 343 C199 337 201 328 200 321 C199 313 198 307 202 304 Z",
+      reveal: "M203 307 C204 320 202 335 203 345",
+    },
+    {
+      id: "mouth-drip-right",
+      phase: "mouth-drips-late",
+      tone: 132,
+      revealWidth: 9,
+      d: "M226 312 C232 314 233 324 232 335 L233 361 C233 369 230 372 227 367 C224 360 226 348 225 338 C224 326 222 317 226 312 Z",
+      reveal: "M228 315 C229 333 227 351 229 368",
+    },
+    {
+      id: "left-ring-drip",
+      phase: "last-drip",
+      tone: 120,
+      revealWidth: 9,
+      d: "M187 359 C192 362 193 370 192 380 L193 394 C193 401 190 404 187 400 C184 395 186 386 185 378 C184 369 183 363 187 359 Z",
+      reveal: "M189 362 C189 375 188 389 189 400",
+    },
+  ]),
+});
+
 const afterState = {
   raw: 0,
+  seen: 0,
   target: 0,
   start: 0,
   end: 1,
@@ -553,6 +732,7 @@ const ritualState = {
 };
 
 let ritualTarget = 0;
+let observeTarget = 0;
 
 const range = (a, b, x) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -593,6 +773,12 @@ function resetPressure(){
 }
 
 function updateSlots(length, error = false){
+  observeTarget = Math.min(1, Math.max(0, length / ANSWER.length));
+  if (ritualCup) ritualCup.style.setProperty("--cup-observe", observeTarget.toFixed(2));
+  const slotList = ritualSlots[0]?.parentElement;
+  if (slotList) slotList.setAttribute(
+    "aria-label", `Four-letter observation, ${length} of ${ANSWER.length} noted`
+  );
   ritualSlots.forEach((slot, index) => {
     slot.classList.toggle("is-filled", index < length);
     slot.classList.toggle("is-error", error);
@@ -600,6 +786,7 @@ function updateSlots(length, error = false){
   if (error) setTimeout(() => {
     ritualSlots.forEach(slot => slot.classList.remove("is-error"));
   }, 320);
+  if (afterState.onchange) afterState.onchange();
 }
 
 function clearTyped(){
@@ -644,53 +831,77 @@ function buildSignature(){
     return node;
   };
   const svg = make("svg", {
-    viewBox: "0 0 640 450",
+    viewBox: `0 0 ${SIGNATURE.width} ${SIGNATURE.height}`,
     role: "img",
     "aria-labelledby": "signature-title signature-desc",
   });
   const title = make("title", { id: "signature-title" });
-  title.textContent = "A rough crimson face on an old wall";
+  title.textContent = "A wet crimson face painted on old plaster";
   const desc = make("desc", { id: "signature-desc" });
-  desc.textContent = "An uneven enclosing ring, two short asymmetrical eyes, a small curved smile, and irregular descending paint drips.";
+  desc.textContent = "One heavy clockwise ring, two uneven eyes, a broad smile, and paint still descending under gravity.";
   svg.append(title, desc);
 
   const defs = make("defs");
-  const filter = make("filter", { id: "ink-waver", x: "-8%", y: "-8%", width: "116%", height: "116%" });
+  const filter = make("filter", { id: "ink-waver", x: "-3%", y: "-3%", width: "106%", height: "106%" });
   filter.append(
-    make("feTurbulence", { type: "fractalNoise", baseFrequency: "0.011 0.034", numOctaves: "2", seed: "11", result: "noise" }),
-    make("feDisplacementMap", { in: "SourceGraphic", in2: "noise", scale: "6.2", xChannelSelector: "R", yChannelSelector: "G" })
+    make("feTurbulence", { type: "fractalNoise", baseFrequency: "0.018 0.055", numOctaves: "2", seed: "11", result: "noise" }),
+    make("feDisplacementMap", { in: "SourceGraphic", in2: "noise", scale: "1.6", xChannelSelector: "R", yChannelSelector: "G" })
   );
   defs.append(filter);
+  for (const part of SIGNATURE.parts){
+    const shape = make("path", { id: `signature-${part.id}`, d: part.d });
+    defs.append(shape);
+
+    const mask = make("mask", {
+      id: `signature-reveal-${part.id}`,
+      maskUnits: "userSpaceOnUse",
+      x: "0",
+      y: "0",
+      width: String(SIGNATURE.width),
+      height: String(SIGNATURE.height),
+    });
+    mask.append(
+      make("rect", {
+        x: "0",
+        y: "0",
+        width: String(SIGNATURE.width),
+        height: String(SIGNATURE.height),
+        fill: "black",
+      }),
+      make("path", {
+        class: `signature-reveal signature-${part.phase}`,
+        d: part.reveal,
+        pathLength: "1",
+        fill: "none",
+        stroke: "white",
+        "stroke-width": String(part.revealWidth),
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round",
+      })
+    );
+    defs.append(mask);
+  }
   svg.append(defs);
 
-  const addPath = (parent, className, d) => parent.append(make("path", {
-    class: className,
-    pathLength: "1",
-    d,
-  }));
+  const appendUses = (parent, className) => {
+    for (const part of SIGNATURE.parts){
+      parent.append(make("use", {
+        class: `${className} signature-${part.phase}`,
+        href: `#signature-${part.id}`,
+        mask: `url(#signature-reveal-${part.id})`,
+      }));
+    }
+  };
 
-  const shadow = make("g", { class: "signature-shadow", "aria-hidden": "true" });
-  addPath(shadow, "signature-circle", "M270 78 C360 50 449 90 484 168 C522 252 484 337 403 375 C320 414 224 378 177 304 C130 229 159 139 239 91 C247 86 254 82 258 81");
-  svg.append(shadow);
-
-  const ink = make("g", { class: "signature-ink", filter: "url(#ink-waver)", "aria-hidden": "true" });
-  const circle = make("g", { class: "signature-circle" });
-  addPath(circle, "", "M270 78 C360 50 449 90 484 168 C522 252 484 337 403 375 C320 414 224 378 177 304 C130 229 159 139 239 91 C247 86 254 82 258 81");
-  addPath(circle, "", "M284 83 C367 61 441 99 474 171 C503 234 490 292 456 329 M395 362 C323 398 235 366 190 299 C147 232 172 151 244 103 C254 96 266 90 271 88");
-  addPath(circle, "", "M298 89 C373 73 432 108 463 175 C494 244 462 314 394 348 C330 380 254 358 210 306");
-  ink.append(circle);
-  addPath(ink, "signature-eye-left", "M256 185 C273 167 299 163 313 174 C299 171 286 175 276 183 C274 202 280 224 275 248");
-  addPath(ink, "signature-eye-right", "M377 183 C399 186 421 197 436 213 C421 203 407 198 397 199 C402 220 397 245 401 272");
-  addPath(ink, "signature-smile", "M292 282 C321 303 365 307 399 286");
-  addPath(ink, "signature-smile signature-smile-faint", "M297 286 C326 305 360 307 389 290");
-  addPath(ink, "signature-smile signature-smile-fray", "M292 278 C311 289 327 294 343 295");
-  addPath(ink, "signature-drip is-heavy", "M453 113 C458 139 452 159 456 182");
-  addPath(ink, "signature-drip is-thin", "M473 149 C480 181 474 207 478 232");
-  addPath(ink, "signature-drip is-thin", "M183 289 C179 316 186 336 181 355");
-  addPath(ink, "signature-drip", "M235 368 C232 391 238 411 234 431");
-  addPath(ink, "signature-drip is-heavy", "M358 395 C363 417 357 434 360 449");
-  addPath(ink, "signature-drip is-thin", "M474 319 C481 346 474 369 479 390");
-  svg.append(ink);
+  const bleed = make("g", { class: "signature-bleed", "aria-hidden": "true" });
+  appendUses(bleed, "signature-paint");
+  const ink = make("g", {
+    class: "signature-ink",
+    filter: "url(#ink-waver)",
+    "aria-hidden": "true",
+  });
+  appendUses(ink, "signature-paint");
+  svg.append(bleed, ink);
   afterSignature.append(svg);
 }
 
@@ -700,6 +911,7 @@ function unlockRitual(){
   buildSignature();
   setRitualPhase("unlocked");
   afterState.unlocked = true;
+  afterState.seen = 0;
   afterState.revealStart = window.scrollY;
   root.dataset.after = "tea";
   if (afterWord) afterWord.textContent = String.fromCharCode(...ANSWER);
@@ -724,6 +936,7 @@ function sealRitual(moveToEnd = true){
   clearTyped();
   afterState.unlocked = false;
   afterState.revealStart = 0;
+  afterState.seen = 0;
   commitAfter(0);
   setRitualPhase("sealed");
   const active = document.activeElement;
@@ -731,7 +944,7 @@ function sealRitual(moveToEnd = true){
   afterElement.inert = true;
   afterElement.setAttribute("inert", "");
   afterElement.setAttribute("aria-hidden", "true");
-  if (ritualRoom) ritualRoom.setAttribute("aria-hidden", "false");
+  if (ritualRoom) ritualRoom.setAttribute("aria-hidden", "true");
   if (ritualCup) ritualCup.tabIndex = -1;
   if (afterName) afterName.setAttribute("aria-hidden", "true");
   if (afterWord) afterWord.textContent = "";
@@ -771,18 +984,23 @@ function acceptTypedCode(code){
 
 function commitAfter(raw){
   afterState.raw = Math.min(1, Math.max(0, raw));
+  // Wet paint does not climb back into the brush when the visitor scrolls up.
+  // Once a part of the signature has been observed it remains until the room
+  // is explicitly resealed.
+  if (afterState.unlocked) afterState.seen = Math.max(afterState.seen, afterState.raw);
+  else afterState.seen = 0;
   const reduced = still.matches || root.classList.contains("no-motion");
   const p = reduced
-    ? (afterState.raw < 0.24 ? 0 : afterState.raw < 0.68 ? 0.54 : 1)
-    : afterState.raw;
+    ? (afterState.seen < 0.24 ? 0 : afterState.seen < 0.68 ? 0.54 : 1)
+    : afterState.seen;
   if (Math.abs(p - afterState.target) < 0.00005 &&
       !(p === 0 && root.dataset.after !== "sealed")) return;
   afterState.target = p;
 
   const tea = 1 - range(0.08, 0.28, p);
   const name = range(0.28, 0.40, p) * (1 - range(0.46, 0.58, p));
-  const wall = range(0.58, 0.72, p);
-  const face = range(0.70, 0.96, p);
+  const wall = range(0.52, 0.64, p);
+  const face = range(0.62, 0.96, p);
   root.style.setProperty("--after", p.toFixed(4));
   root.style.setProperty("--after-chrome",
     (0.22 * (1 - range(0.54, 0.84, p))).toFixed(4));
@@ -790,16 +1008,23 @@ function commitAfter(raw){
   root.style.setProperty("--after-name", name.toFixed(4));
   root.style.setProperty("--after-wall", wall.toFixed(4));
   root.style.setProperty("--after-face", face.toFixed(4));
-  root.style.setProperty("--after-circle", range(0.70, 0.81, p).toFixed(4));
-  root.style.setProperty("--after-eye-left", range(0.78, 0.85, p).toFixed(4));
-  root.style.setProperty("--after-eye-right", range(0.81, 0.88, p).toFixed(4));
-  root.style.setProperty("--after-smile", range(0.85, 0.93, p).toFixed(4));
-  root.style.setProperty("--after-drips", range(0.91, 0.98, p).toFixed(4));
+  root.style.setProperty("--after-circle", range(0.56, 0.74, p).toFixed(4));
+  root.style.setProperty("--after-accent", range(0.61, 0.74, p).toFixed(4));
+  root.style.setProperty("--after-ring-drip", range(0.68, 1.00, p).toFixed(4));
+  root.style.setProperty("--after-eye-right", range(0.76, 0.84, p).toFixed(4));
+  root.style.setProperty("--after-eye-right-drip", range(0.81, 0.92, p).toFixed(4));
+  root.style.setProperty("--after-eye-left", range(0.80, 0.88, p).toFixed(4));
+  root.style.setProperty("--after-eye-left-drip", range(0.85, 0.97, p).toFixed(4));
+  root.style.setProperty("--after-smile", range(0.86, 0.94, p).toFixed(4));
+  root.style.setProperty("--after-mouth-drips", range(0.92, 0.97, p).toFixed(4));
+  root.style.setProperty("--after-mouth-drips-mid", range(0.94, 0.985, p).toFixed(4));
+  root.style.setProperty("--after-mouth-drips-late", range(0.96, 0.997, p).toFixed(4));
+  root.style.setProperty("--after-last-drip", range(0.97, 1.00, p).toFixed(4));
 
   const phase = !afterState.unlocked ? "sealed"
     : p < 0.27 ? "tea"
     : p < 0.58 ? "name"
-    : p < 0.70 ? "wall"
+    : p < 0.60 ? "wall"
     : p < 0.97 ? "signature"
     : "found";
   if (root.dataset.after !== phase) root.dataset.after = phase;
@@ -934,6 +1159,30 @@ addEventListener("keydown", event => {
   }
 });
 
+function resetCupPointer(){
+  if (!ritualCup) return;
+  ritualCup.style.setProperty("--cup-yaw", "0deg");
+  ritualCup.style.setProperty("--cup-pitch", "0deg");
+  ritualCup.style.setProperty("--steam-bias", "0px");
+}
+
+if (ritualCup){
+  ritualCup.addEventListener("pointermove", event => {
+    if (ritualState.phase !== "armed" || still.matches ||
+        root.classList.contains("no-motion")) return;
+    const rect = ritualCup.getBoundingClientRect();
+    const x = Math.min(1, Math.max(-1,
+      ((event.clientX - rect.left) / Math.max(1, rect.width) - 0.5) * 2));
+    const y = Math.min(1, Math.max(-1,
+      ((event.clientY - rect.top) / Math.max(1, rect.height) - 0.5) * 2));
+    ritualCup.style.setProperty("--cup-yaw", `${(x * 2.5).toFixed(2)}deg`);
+    ritualCup.style.setProperty("--cup-pitch", `${(-y * 1.8).toFixed(2)}deg`);
+    ritualCup.style.setProperty("--steam-bias", `${(x * 4.5).toFixed(2)}px`);
+  }, { passive: true });
+  ritualCup.addEventListener("pointerleave", resetCupPointer, { passive: true });
+  ritualCup.addEventListener("blur", resetCupPointer);
+}
+
 if (ritualCup) ritualCup.addEventListener("click", () => {
   if (ritualState.phase !== "armed" || !ritualDialog || !ritualAnswer) return;
   ritualAnswer.value = "";
@@ -1033,7 +1282,7 @@ const uni = (p, names) => {
 const uS = uni(progScene, ["res","shift","camPos","camTgt","uMin","uMax","time",
                            "worldA","worldB","morph","phase","cut","focus",
                            "inflate","split","zoom","maxSteps","after","ritual",
-                           "relief","mark"]);
+                           "observe","relief","mark"]);
 const uA = uni(progAscii, ["scene","atlas","res","grid","mouse","cell","count",
                            "time","boot","lens","lensR","motion","warpK","reveal"]);
 
@@ -1135,70 +1384,24 @@ function buildMark(){
   ctx.font = '800 162px ui-monospace,"DejaVu Sans Mono",Menlo,Consolas,monospace';
   ctx.fillText(String.fromCharCode(...ANSWER), W / 2, 142);
 
-  ctx.fillStyle = "transparent";
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-
-  const stroke = (colour, width, draw) => {
-    ctx.strokeStyle = colour;
-    ctx.lineWidth = width;
-    ctx.beginPath();
-    draw(ctx);
-    ctx.stroke();
-  };
-
-  // Blue intensity is construction order. Three nearby passes establish one
-  // enclosing hand gesture before the short eyes, restrained smile, and drips.
-  // The control points are an original procedural homage, not a traced mark.
-  stroke("#0000ff", 12, p => {
-    p.moveTo(344, 48);
-    p.bezierCurveTo(416, 33, 487, 55, 515, 100);
-    p.bezierCurveTo(545, 150, 515, 199, 450, 220);
-    p.bezierCurveTo(384, 243, 307, 222, 269, 181);
-    p.bezierCurveTo(232, 140, 255, 90, 319, 57);
-    p.bezierCurveTo(325, 54, 332, 51, 335, 50);
-  });
-  stroke("#0000fa", 6, p => {
-    p.moveTo(355, 51);
-    p.bezierCurveTo(421, 39, 481, 60, 507, 102);
-    p.bezierCurveTo(534, 148, 505, 193, 446, 213);
-    p.bezierCurveTo(385, 234, 315, 216, 279, 178);
-    p.bezierCurveTo(245, 141, 265, 96, 324, 63);
-    p.bezierCurveTo(332, 58, 341, 55, 345, 53);
-  });
-  stroke("#0000f6", 4, p => {
-    p.moveTo(366, 55);
-    p.bezierCurveTo(426, 46, 474, 65, 498, 105);
-    p.bezierCurveTo(523, 145, 496, 187, 442, 206);
-    p.bezierCurveTo(391, 224, 330, 212, 296, 182);
-    p.bezierCurveTo(278, 166, 268, 148, 271, 132);
-  });
-  stroke("#0000d4", 10, p => {
-    p.moveTo(333, 107);
-    p.bezierCurveTo(347, 97, 367, 95, 378, 101);
-    p.moveTo(430, 106);
-    p.bezierCurveTo(448, 108, 466, 114, 477, 123);
-  });
-  stroke("#0000b8", 12, p => {
-    p.moveTo(362, 160);
-    p.bezierCurveTo(385, 172, 420, 174, 447, 162);
-  });
-  stroke("#000092", 7, p => {
-    p.moveTo(488, 74);
-    p.bezierCurveTo(493, 89, 488, 102, 492, 116);
-    p.moveTo(503, 96);
-    p.bezierCurveTo(508, 114, 503, 129, 506, 143);
-    p.moveTo(351, 101);
-    p.bezierCurveTo(349, 116, 354, 128, 350, 142);
-    p.moveTo(458, 114);
-    p.bezierCurveTo(463, 130, 458, 145, 462, 159);
-    p.moveTo(274, 174);
-    p.bezierCurveTo(272, 189, 277, 202, 273, 215);
-    p.moveTo(316, 218);
-    p.bezierCurveTo(314, 231, 319, 242, 316, 252);
-    p.moveTo(415, 232);
-    p.bezierCurveTo(419, 245, 415, 253, 417, 255);
-  });
+  // Preserve the signature's aspect ratio inside the packed texture. The
+  // public proof and accepted word keep their existing red/green channels;
+  // only blue receives these pressure silhouettes and their reveal order.
+  const pad = 6;
+  const signatureScale = Math.min(
+    (W - pad * 2) / SIGNATURE.width,
+    (H - pad * 2) / SIGNATURE.height
+  );
+  const signatureX = (W - SIGNATURE.width * signatureScale) / 2;
+  const signatureY = (H - SIGNATURE.height * signatureScale) / 2;
+  ctx.save();
+  ctx.translate(signatureX, signatureY);
+  ctx.scale(signatureScale, signatureScale);
+  for (const part of SIGNATURE.parts){
+    ctx.fillStyle = `rgb(0, 0, ${part.tone})`;
+    ctx.fill(new Path2D(part.d));
+  }
+  ctx.restore();
   ctx.globalCompositeOperation = "source-over";
 
   const t = gl.createTexture();
@@ -1359,6 +1562,7 @@ const S = {
   act: 0, actTarget: 0,
   after: afterState.target,
   ritual: ritualTarget,
+  observe: observeTarget,
   mouse: [0.5, 0.5], mouseSmooth: [0.5, 0.5],
   lens: 0, lensWant: 0,
   motion: still.matches ? 0 : 1,
@@ -1531,6 +1735,7 @@ function draw(now){
     S.act = reduced ? S.actTarget : damp(S.act, S.actTarget, 7.2, dt);
     S.after = reduced ? afterState.target : damp(S.after, afterState.target, 8.4, dt);
     S.ritual = reduced ? ritualTarget : damp(S.ritual, ritualTarget, 5.8, dt);
+    S.observe = reduced ? observeTarget : damp(S.observe, observeTarget, 12.0, dt);
     S.mouseSmooth[0] = reduced ? S.mouse[0] : damp(S.mouseSmooth[0], S.mouse[0], 8.0, dt);
     S.mouseSmooth[1] = reduced ? S.mouse[1] : damp(S.mouseSmooth[1], S.mouse[1], 8.0, dt);
     S.lens = damp(S.lens, S.lensWant, 12.0, dt);
@@ -1564,14 +1769,25 @@ function draw(now){
     if (wi === 5 && S.ritual > 0.001){
       const ritualMix = smooth(0.02, 0.96, S.ritual);
       const cupCam = {
-        pos: [18 + mx * 5, 27 + my * 3, 58],
-        tgt: [0, 11, 0],
-        zoom: 1.48,
-        shift: [0.30, -0.02],
+        pos: [18 + mx * 5, 30 + my * 3, 82],
+        tgt: [-2, 10, 0],
+        zoom: 1.34,
+        shift: [0.29, -0.02],
       };
       cam = blendCam(cam, cupCam, ritualMix);
       if (S.after > 0.001){
-        const breach = smooth(0.54, 0.82, S.after);
+        const dive = smooth(0.13, 0.30, S.after);
+        const ringTurn = smooth(0.22, 0.48, S.after);
+        const ringCenter = -14 * (1 - ringTurn);
+        const overheadCam = {
+          pos: [ringCenter + mx * 0.8, 66, 1 + my * 0.8],
+          tgt: [ringCenter, 1, 0],
+          zoom: 1.38,
+          shift: [0, 0],
+        };
+        cam = blendCam(cam, overheadCam, dive);
+
+        const breach = smooth(0.29, 0.58, S.after);
         const wallCam = {
           pos: [mx * 3, 21 + my * 2, 72 - breach * 7],
           tgt: [0, 18, 0],
@@ -1582,9 +1798,6 @@ function draw(now){
       }
     }
     if (innerWidth < 900) cam.shift = [0, 0.10];
-
-    const fracture = smooth(0.10, 0.24, S.after) *
-                     (1 - smooth(0.31, 0.44, S.after));
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.viewport(0, 0, fboW, fboH);
@@ -1600,7 +1813,7 @@ function draw(now){
     gl.uniform1f(uS.worldB, wb);
     gl.uniform1f(uS.morph, morph);
     gl.uniform1f(uS.phase, reduced ? 0 : time * 2.2);
-    gl.uniform1f(uS.cut, wi === 5 ? fracture * 0.44 : 0);
+    gl.uniform1f(uS.cut, 0);
     gl.uniform1f(uS.focus, S.focus);
     gl.uniform1f(uS.inflate, wi === 0 ? (reduced ? 1 : smooth(0.08, 0.94, S.boot)) : 1);
     gl.uniform1f(uS.split, splitProgress);
@@ -1608,6 +1821,7 @@ function draw(now){
     gl.uniform1f(uS.maxSteps, maxSteps);
     gl.uniform1f(uS.after, S.after);
     gl.uniform1f(uS.ritual, S.ritual);
+    gl.uniform1f(uS.observe, S.observe);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texRel);
     gl.activeTexture(gl.TEXTURE1);
